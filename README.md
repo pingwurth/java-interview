@@ -3,6 +3,10 @@
 
 ## 学习资料
 
+Java 八股文
+
+- https://www.yuque.com/hollis666/ca2plb
+
 GitHub 中文资料榜 - Java
 
 - https://github.com/GrowingGit/GitHub-Chinese-Top-Charts/blob/master/content/charts/overall/knowledge/Java.md
@@ -108,6 +112,10 @@ Java 面试八股文
 
 
 ## 架构
+
+GitHub stars 228k+ 系统设计入门
+
+- https://github.com/donnemartin/system-design-primer/blob/master/README-zh-Hans.md
 
 
 
