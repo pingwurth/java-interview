@@ -1,0 +1,116 @@
+<mxfile host="Electron" modified="2023-09-05T18:44:03.661Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/21.6.8 Chrome/114.0.5735.289 Electron/25.5.0 Safari/537.36" etag="N5LVT9Ai7ewA38wX6sAH" version="21.6.8" type="device">
+  <diagram name="值传递和引用传递" id="xZ36-Uk2qN_AMFSexb2k">
+    <mxGraphModel dx="1100" dy="817" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-1" value="堆" style="rounded=1;whiteSpace=wrap;html=1;fontSize=25;verticalAlign=bottom;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+          <mxGeometry x="323" y="70" width="290" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-3" value="" style="endArrow=classic;html=1;rounded=1;entryX=0;entryY=0.25;entryDx=0;entryDy=0;sketch=1;curveFitting=1;jiggle=2;" parent="1" target="jAFCzvt1h2YVh9Wsnnv7-5" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="253" y="80" as="sourcePoint" />
+            <mxPoint x="223" y="145" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-4" value="ping" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=17;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+          <mxGeometry x="200" y="60" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-5" value="0x123456" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=15;fontColor=#FF66FF;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+          <mxGeometry x="353" y="125" width="80" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-9" value="User" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+          <mxGeometry x="443" y="100" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-10" value="name = &quot;ping&quot;&lt;br&gt;age = 33" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;rounded=1;sketch=1;curveFitting=1;jiggle=2;" parent="jAFCzvt1h2YVh9Wsnnv7-9" vertex="1">
+          <mxGeometry y="26" width="160" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-13" value="User ping = new User(&quot;ping&quot;, 33);" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=#6c8ebf;fillColor=#dae8fc;rounded=1;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+          <mxGeometry x="60" y="20" width="200" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-14" value="&lt;div style=&quot;text-align: left;&quot;&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;happyBirthday(ping);&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;text-align: left;&quot;&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;text-align: left;&quot;&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;public void happyBirthday(User user) {&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;text-align: left;&quot;&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;&amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; user.setAge(34);&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;text-align: left;&quot;&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;&amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; print(&quot;生日快乐&quot;);&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;text-align: left;&quot;&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;}&lt;/span&gt;&lt;/div&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=#6c8ebf;fillColor=#dae8fc;rounded=1;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+          <mxGeometry x="60" y="325" width="230" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-15" value="堆" style="rounded=1;whiteSpace=wrap;html=1;fontSize=25;verticalAlign=bottom;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+          <mxGeometry x="323" y="425" width="290" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-16" value="" style="endArrow=classic;html=1;rounded=1;entryX=0;entryY=0.25;entryDx=0;entryDy=0;exitX=1;exitY=0.75;exitDx=0;exitDy=0;sketch=1;curveFitting=1;jiggle=2;" parent="1" source="jAFCzvt1h2YVh9Wsnnv7-20" target="jAFCzvt1h2YVh9Wsnnv7-17" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="253" y="451" as="sourcePoint" />
+            <mxPoint x="223" y="500" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-23" value="&amp;nbsp;引用1&amp;nbsp;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];rounded=1;sketch=1;curveFitting=1;jiggle=2;" parent="jAFCzvt1h2YVh9Wsnnv7-16" vertex="1" connectable="0">
+          <mxGeometry x="-0.3053" y="-2" relative="1" as="geometry">
+            <mxPoint y="-1" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-17" value="0x123456" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=15;fontColor=#FF66FF;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+          <mxGeometry x="353" y="480" width="80" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-18" value="User" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+          <mxGeometry x="443" y="455" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-19" value="name = &quot;ping&quot;&lt;br&gt;age = 34" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;rounded=1;sketch=1;curveFitting=1;jiggle=2;" parent="jAFCzvt1h2YVh9Wsnnv7-18" vertex="1">
+          <mxGeometry y="26" width="160" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-20" value="ping" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=17;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+          <mxGeometry x="181" y="441" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-21" value="" style="endArrow=classic;html=1;rounded=1;entryX=0;entryY=0.75;entryDx=0;entryDy=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;sketch=1;curveFitting=1;jiggle=2;" parent="1" source="jAFCzvt1h2YVh9Wsnnv7-22" target="jAFCzvt1h2YVh9Wsnnv7-17" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="263" y="461" as="sourcePoint" />
+            <mxPoint x="363" y="495" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-24" value="&amp;nbsp;引用2&amp;nbsp;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];rounded=1;sketch=1;curveFitting=1;jiggle=2;" parent="jAFCzvt1h2YVh9Wsnnv7-21" vertex="1" connectable="0">
+          <mxGeometry x="-0.2979" y="-1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-22" value="user" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=17;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+          <mxGeometry x="177" y="530" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-25" value="&lt;div style=&quot;text-align: left;&quot;&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;happyBirthday(ping);&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;text-align: left;&quot;&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;text-align: left;&quot;&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;public:&amp;nbsp;&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;text-align: left;&quot;&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;void happyBirthday(User * user) {&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;text-align: left;&quot;&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;&amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; user.setAge(34);&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;text-align: left;&quot;&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;&amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; print(&quot;生日快乐&quot;);&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;text-align: left;&quot;&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;}&lt;/span&gt;&lt;/div&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=#6c8ebf;fillColor=#dae8fc;rounded=1;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+          <mxGeometry x="75" y="680" width="200" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-26" value="堆" style="rounded=1;whiteSpace=wrap;html=1;fontSize=25;verticalAlign=bottom;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+          <mxGeometry x="323" y="785" width="290" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-27" value="" style="endArrow=classic;html=1;rounded=1;entryX=0;entryY=0.25;entryDx=0;entryDy=0;exitX=1;exitY=0.75;exitDx=0;exitDy=0;sketch=1;curveFitting=1;jiggle=2;" parent="1" source="jAFCzvt1h2YVh9Wsnnv7-32" target="jAFCzvt1h2YVh9Wsnnv7-29" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="253" y="811" as="sourcePoint" />
+            <mxPoint x="223" y="860" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-29" value="0x123456" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=15;fontColor=#FF66FF;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+          <mxGeometry x="353" y="840" width="80" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-30" value="User" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+          <mxGeometry x="443" y="815" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-31" value="name = &quot;ping&quot;&lt;br&gt;age = 34" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;rounded=1;sketch=1;curveFitting=1;jiggle=2;" parent="jAFCzvt1h2YVh9Wsnnv7-30" vertex="1">
+          <mxGeometry y="26" width="160" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-32" value="ping" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=17;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+          <mxGeometry x="200" y="810" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-33" value="" style="endArrow=classic;html=1;rounded=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;sketch=1;curveFitting=1;jiggle=2;" parent="1" source="jAFCzvt1h2YVh9Wsnnv7-35" target="jAFCzvt1h2YVh9Wsnnv7-32" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="263" y="821" as="sourcePoint" />
+            <mxPoint x="363" y="855" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-35" value="user" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=17;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+          <mxGeometry x="73" y="801" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-36" value="Java 只有值传递，只不过对象的传递，传递的是地址值" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontStyle=1;fontSize=18;rounded=1;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+          <mxGeometry x="20" y="270" width="460" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="jAFCzvt1h2YVh9Wsnnv7-37" value="C++ 才是真正的引用传递" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontStyle=1;fontSize=18;rounded=1;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+          <mxGeometry x="20" y="630" width="220" height="40" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
