@@ -108,3 +108,87 @@ Java 是一种面向对象的语言，为了赋予基本类型对象的特性，
 
 基本类型在某些场景无法适用，比如集合的泛型必须是 Object，没有包装类就不行。
 
+![基本类型和包装类](../images/基本类型和包装类.png)
+
+#### 为什么不能用浮点数表示金额？
+
+二进制无法表示所有的小数，float（单精度浮点数） 和 double（双精度浮点数） 能表示的小数都是一个近似值，用他们进行高精度运算时，会发生精度丢失；
+
+所以不能用浮点数表示金额，否则会发生资损，Java 提供了 `BigDecimal` 来进行精确的运算。
+
+#### 为什么不能用 BigDecimal 的 equals 方法做等值比较？
+
+因为 `BigDecimal` 的 equals 除了比较数值，还会比较 `scale 标度`，比如：`3.14` 和 `3.140` 的 `scale` 分别为 2 和 3，用 equals 比较它们是否相等会返回 `false`。
+
+`BigDecimal` 比较两个值是否相等应该使用 `compareTo`：
+
+```java
+public statci void main(String[] args) {
+    BigDecimal a = new BigDecimal("3.14");
+    BigDecimal b = new BigDecimal("3.140");
+    System.out.println(a.equals(b)); // result: false
+    System.out.println(a.compareTo(b)); // result: 0
+}
+```
+
+#### 为什么不能使用 new BigDecimal(double) 构建 BigDecimal 对象？
+
+有精度损失的风险，实际存储的是一个小数位数很长的值，一般都是使用 `new BigDecimal(String)` 来构建 BigDecimal 对象。
+
+或者使用 `BigDecimal.valueOf(double)` ，它内部使用 `Double.toString` 对尾数进行了截断。
+
+#### 为什么对 Java 中的负数取绝对值结果不一定是正数？
+
+这是一个越界问题，Integer 能表示的最小值为 `-2^31`，最大值为 `2^31 - 1`，当对最小值取绝对值时，就会发现还是它本身。
+
+![int最大值和最小值](../images/int最大值和最小值.png)
+
+#### String、StringBuilder 和 StringBuffer 的区别？
+
+String 是不可变的，StringBuilder 和 StringBuffer 都是可变的；
+
+StringBuffer 是线程安全的，StringBuilder 都是非线程安全的；
+
+[引导方向 -> 线程安全](#)
+
+不过 StringBuffer 中的方法通过 `synchronized` 实现线程安全，性能较差，一般不会使用。
+
+#### String 的 "+" 是如何实现的？
+
+通过反编译可以发现，字符串拼接是 new 了一个 `StringBuilder`，使用它的 `append` 方法来实现的。
+
+#### String 是怎么实现的？
+
+jdk8 及之前的版本都是使用 `char[]` 实现，但 jdk9 开始就改用 `byte[]` 实现了。
+
+java 内部是使用 UTF-16 来编码的，每一个字符占据 2 个字节；但是一些简单得字符，如：ISO8859-1(Latin1) 当中的字符单字节就能表示了，但是在字符串当中还是得用 char，也就是两个字节来表示，这就有点浪费了，于是从 jdk9 开始就废弃了 `char[]` 改用了 `byte[]`，并加入了一个编码标识符：
+
+```java
+private final byte coder;
+```
+
+- coder 等于 0，表示  LATIN1 编码，即 1 个字节代表 1 个字符；
+
+- coder 等于 1，表示 UTF-16 编码，即 2 个字节代表 1 个字符。
+
+#### 在 for 循环中使用 "+" 进行字符串拼接有什么问题？
+
+在 for 循环中使用 "+" 进行字符串拼接每次都会 new 一个 StringBuilder 再调用 append：
+
+```java
+str = (new StringBuilder()).append(str).append(s).toString();
+```
+
+频繁创建对象会造成内存资源浪费，还增加程序运行时间。
+
+#### String 为什么设计成不可变的？
+
+String 被设计为不可变的主要是考虑了安全性、性能和线程安全的问题。
+
+- 字符串经常用来存储敏感信息，如：用户名、密码、url 等，如果是可变的，字符串的内容将变得不可信，增加了安全隐患。
+
+- 因为字符串是不可变的，所以是线程安全的，不需要额外编写线程安全的代码；如果字符串是可变的，那多线程访问的时候就需要考虑线程安全的问题了。
+- 字符串是使用最频繁的数据结构，JVM 在 heap 中专门开辟了一块空间作为字符串常量池，用于缓存字符串对象，相同的字符串不会重复创建，而是复用字符串常量池中的，这可以避免频繁创建字符串，提升性能；如果字符串是可变的，就无法实现这个功能了，因为一旦字符串被修改，所有引用到的地方都会跟着变。
+
+- 还有像 HashMap 会频繁地使用 `hashCode()` 方法，得益于 String 的不可变性，String 类在创建时会计算和缓存它的哈希码，之后使用无需再计算，也提高了性能。
+
