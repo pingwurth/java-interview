@@ -192,3 +192,238 @@ String 被设计为不可变的主要是考虑了安全性、性能和线程安�
 
 - 还有像 HashMap 会频繁地使用 `hashCode()` 方法，得益于 String 的不可变性，String 类在创建时会计算和缓存它的哈希码，之后使用无需再计算，也提高了性能。
 
+#### String str = new String("54pig"); 创建了几个对象？
+
+1 个或 2 个，new 操作会创建一个对象，还有一个对象却决于字符串常量池中是否存在 "54pig" 这个字符串对象，如果没有也会创建。
+
+#### String#intern() 有什么作用？
+
+`String#intern()`  会判断常量池中是否存在给定的字符串，如果不存在就将其放入常量池，最后返回这个字符串常量的引用。
+
+一般不会用到这个方法，因为我们声明字符串常量的时候会自动触发这个动作；但如果字符串的值只有在运行期才能确定，那我们就可以通过 `String#intern()` 来避免重复创建字符串对象。
+
+#### String a = "ab"; String b = "a" + "b"; a == b 吗？
+
+结果为 true，`==` 比较的是地址，因为 a 和 b 都是由字面量组成的字符串，在编译之后会把字面量拼接在一起，实际运行的时候只有 `"ab"` 这个字符串对象，变量 a 和变量 b 指向同一个字符串对象。
+
+#### 字符串有长度限制吗？
+
+有，一个是编译期限制，一个是运行期限制。
+
+编译期限制是《Java 虚拟机规范》定义的，为 2 个字节的无符号数，就是 16 位，`2^16 -1 = 65535`.
+
+运行期限制是 String 的构造函数入参决定的，为 int 型的最大值，即 `2^31 - 1`，约等于 4G.
+
+#### RPC接口返回中，使用基本类型还是包装类？
+
+使用包装类，基本类型有默认值，会产生歧义，包装类默认值为 null 明确知道就是没赋值。
+
+#### Java 中有哪些语法糖？都是怎么实现的？
+
+> 语法糖（Syntactic sugar），指在计算机语言中添加的某种语法，这种语法对语言的功能并没有影响，但是更方便程序员使用。
+>
+> 虽然Java中有很多语法糖，但是Java虚拟机并不支持这些语法糖，所以这些语法糖在编译阶段就会被还原成简单的基础语法结构，这样才能被虚拟机识别，这个过程就是解语法糖。
+>
+> `com.sun.tools.javac.main.JavaCompiler` 的 `compile` 方法会调用 `desugar`  来解语法糖。
+
+**常见的语法糖有 switch 支持枚举及字符串、泛型、条件编译、断言、可变参数、自动装箱/拆箱、枚举、内部类、增强 for 循环、try-with-resources 语句、lambda 表达式等。**
+
+通过 `jad -p *.class` 反编译后，可以查看语法糖的原本的样子：
+
+- switch 支持枚举或字符串
+
+```java
+String str = "world";
+String s;
+switch((s = str).hashCode())
+{
+default:
+    break;
+case 99162322:
+    if(s.equals("hello"))
+        System.out.println("hello");
+    break;
+case 113318802:
+    if(s.equals("world"))
+        System.out.println("world");
+    break;
+}
+```
+
+实际是 `hashCode() + equals()` 进行判断比较。
+
+- 泛型
+
+JVM 并不认识泛型，编译阶段会进行类型擦除，泛型只是编码的时候起到约束的作用，类型擦除后，其实都是 Object。
+
+- 自动装箱与自动拆箱
+
+`Integer.valueOf(i)` 实现自动装箱，`i.intValue()` 实现自动拆箱。
+
+- 可变参数
+
+使用 jad 反编译后会发现，可变参数其实就是传个数组。
+
+- 枚举
+
+枚举本质上是一个继承了 `java.lang.Enum` 的 final 类，我们声明的枚举实例本质上是 `public static final` 修饰的常量，这些实例会维护到一个 `$VALUES[]` 数组中，也是 `public static final` 修饰的，枚举默认还提供了 `values()` 方法返回所有实例的数组 `$VALUES[]` 的克隆对象。
+
+```java
+public final class Size extends Enum {
+
+    public static Size[] values() {
+        return (Size[]) $VALUES.clone();
+    }
+
+    public static Size valueOf(String name) {
+        return (Size) Enum.valueOf(EnumTest$Size, name);
+    }
+
+    public String getAbbreviation() {
+        return abbreviation;
+    }
+
+    public static final Size SMALL;
+    public static final Size MEDIUM;
+    public static final Size LARGE;
+    public static final Size EXTRA_LARGE;
+    private String abbreviation;
+    private static final Size $VALUES[];
+
+    static {
+        SMALL = new Size("SMALL", 0, "S");
+        MEDIUM = new Size("MEDIUM", 1, "M");
+        LARGE = new Size("LARGE", 2, "L");
+        EXTRA_LARGE = new Size("EXTRA_LARGE", 3, "XL");
+        $VALUES = (new Size[]{
+                SMALL, MEDIUM, LARGE, EXTRA_LARGE
+        });
+    }
+
+    private Size(String s, int i, String abbreviation) {
+        super(s, i);
+        this.abbreviation = abbreviation;
+    }
+}
+```
+
+- 内部类
+
+编译后是两个 class 文件，一个 `outer.class`，一个 `outer$inner.class` 文件。
+
+- 断言
+
+本质就是 if 语句，断言结果为 true 什么都不做，为 false 就抛出 AssertError 打断程序的执行。
+
+- 数值字面量
+
+可以在数字之间插入任意多个下划线，对于大数值更方便阅读，编译期间这些下划线会被去除。
+
+```java
+int i = 34_157____892
+```
+
+- for-each
+
+遍历数组其实就是 for 循环，遍历 Collection 就是迭代器。
+
+以 List 为例：
+
+```java
+for (String s : strList) {
+    System.out.println(s);
+}
+```
+
+反编译后：
+
+```java
+for(Iterator iterator = strList.iterator(); iterator.hasNext(); System.out.println(s))
+        s = (String) iterator.next();
+```
+
+- try-with-resource
+
+编译器帮我们做了资源关闭的动作。
+
+- Lambda 表达式
+
+依赖 `java.lang.invoke.LambdaMetafactory#metafactory` 这个 API 实现，通过这个 API 把 Lambda 表达式包装成一个 CallSite 对象，CallSite 内部有一个 MethodHandle，所以本质上也是通过反射来实现的。
+
+> 扩展 —— MethodHandle 与传统的反射 API（如 java.lang.reflect.Method） 有什么区别？
+>
+> 1. **性能和效率：** MethodHandle 在性能上通常比传统的反射 API 更高效。MethodHandle 使用底层的字节码指令进行方法调用，避免了一些反射操作的开销。此外，MethodHandle 可以被 JVM 进行更多的优化，使得方法调用更加高效。
+> 2. **灵活性：** MethodHandle 提供了更灵活的方法调用方式。它可以直接调用私有方法、实例方法、静态方法以及构造函数，而不需要提供额外的访问权限。MethodHandle 还可以在运行时动态绑定方法调用，适应不同的方法签名和参数类型。
+> 3. **类型安全：** MethodHandle 在编译时进行类型检查，可以捕获类型错误。这可以帮助开发人员在编码阶段发现错误，而不是在运行时才抛出异常。
+> 4. **代码简洁性：** 使用 MethodHandle 可以编写更简洁、易读的代码。相比传统的反射 API，MethodHandle 的语法更简洁明了，可以更方便地进行方法调用。
+> 5. **异常处理：** MethodHandle 在异常处理方面与传统反射 API 有一些区别。在使用 MethodHandle 时，异常被包装在 `Throwable` 中抛出，需要在代码中显式处理。而传统的反射 API 则会抛出具体的异常类型，可以更方便地进行异常处理。
+
+#### 说说泛型的作用
+
+泛型是 JDK5 引入的新特性，允许在定义类、接口、方法时使用类型参数。在使用的时候通过类型参数可以约束传入的对象，避免在运行时出现类型转换错误，在编译时进行类型检查增加了程序的安全性。
+
+#### 什么是类型擦除？
+
+
+
+#### 泛型中 K T V E ? Object 等分别代表什么含义?
+
+
+
+#### 泛型中上下界限定符 extends 和 super 有什么区别？
+
+
+
+#### 什么是SPI，和API有什么区别？
+
+#### 什么是反射机制？为什么反射慢？
+
+#### Java 中创建对象有哪些种方式？
+
+#### Java 的动态代理如何实现？
+
+#### Java 注解的作用
+
+#### 说一说 Java 序列化的原理
+
+#### serialVersionUID 有何用途? 如果没定义会有什么问题？
+
+#### 你知道 fastjson 的反序列化漏洞吗？
+
+#### Java 中异常分哪两类，有什么区别？
+
+#### 以下关于异常处理的代码有哪些问题？
+
+#### finally 中代码一定会执行吗？
+
+#### Java 中的枚举有什么特点和好处？
+
+#### 什么是 AIO、BIO 和 NIO？
+
+#### Java 是值传递还是引用传递？
+
+#### 说一说是深拷贝和浅拷贝
+
+#### SimpleDateFormat 是线程安全的吗？使用时应该注意什么？
+
+#### 现在 JDK 的最新版本是什么？
+
+#### JDK 新版本中都有哪些新特性？
+
+#### 什么是 UUID，能保证唯一吗？
+
+#### char 能存储中文吗？
+
+#### while(true) 和 for(;;) 哪个性能好？
+
+#### ClassNotFoundException 和 NoClassDefFoundError 的区别是什么？
+
+#### 为什么 JDK 9 中把 String 的 char[] 改成了 byte[]？
+
+#### Arrays.sort 是使用什么排序算法实现的？
+
+#### String是如何实现不可变的？
+
+#### 字符串常量是什么时候进入到字符串常量池的？
+
+#### 说一说 String 中 intern() 方法
