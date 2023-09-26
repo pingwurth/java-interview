@@ -366,19 +366,24 @@ for(Iterator iterator = strList.iterator(); iterator.hasNext(); System.out.print
 
 JVM 是不认识泛型的，类型擦除指的是编译器在编译时把泛型信息清除的过程。
 
-类型擦除的缺点：
-
-1. 泛型不可以重载
-2. 泛型异常类不可以多次catch
-3. 泛型类中的静态变量也只有一份，不会有多份
+类型擦除的缺点：泛型不可以重载
 
 #### 泛型中 K T V E ? Object 等分别代表什么含义?
 
-
+- E – Element (在集合中使用，因为集合中存放的是元素)
+- T – Type（Java 类）
+- K – Key（键）
+- V – Value（值）
+- N – Number（数值类型）
+- ？ – 表示不确定的 java 类型（无限制通配符类型）
+- S、U、V – 2nd、3rd、4th types
+- Object – 是所有类的根类，任何类的对象都可以设置给该 Object 引用变量，使用的时候可能需要类型强制转换。
 
 #### 泛型中上下界限定符 extends 和 super 有什么区别？
 
+`<? extends T>` 表示类型的上界，表示参数化类型的可能是 T 或是 T 的子类；
 
+`<? super T>` 表示类型下界（Java Core 中叫超类型限定），表示参数化类型是此类型的超类型（父类型），直至 Object。
 
 #### 什么是SPI，和API有什么区别？
 
