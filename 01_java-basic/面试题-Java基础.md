@@ -362,9 +362,15 @@ for(Iterator iterator = strList.iterator(); iterator.hasNext(); System.out.print
 
 泛型是 JDK5 引入的新特性，允许在定义类、接口、方法时使用类型参数。在使用的时候通过类型参数可以约束传入的对象，避免在运行时出现类型转换错误，在编译时进行类型检查增加了程序的安全性。
 
-#### 什么是类型擦除？
+#### 什么是类型擦除？类型擦除的缺点？
 
+JVM 是不认识泛型的，类型擦除指的是编译器在编译时把泛型信息清除的过程。
 
+类型擦除的缺点：
+
+1. 泛型不可以重载
+2. 泛型异常类不可以多次catch
+3. 泛型类中的静态变量也只有一份，不会有多份
 
 #### 泛型中 K T V E ? Object 等分别代表什么含义?
 
@@ -378,7 +384,7 @@ for(Iterator iterator = strList.iterator(); iterator.hasNext(); System.out.print
 
 #### 什么是反射机制？为什么反射慢？
 
-#### Java 中创建对象有哪些种方式？
+#### Java 中创建对象有哪几种方式？
 
 #### Java 的动态代理如何实现？
 
