@@ -368,6 +368,21 @@ JVM 是不认识泛型的，类型擦除指的是编译器在编译时把泛型�
 
 类型擦除的缺点：泛型不可以重载
 
+#### 在泛型为 Integer 的 ArrayList 中存放一个 String 类型的对象
+
+可以通过反射实现：
+
+```java
+public void test() throws Exception {
+    ArrayList<Integer> list = new ArrayList<Integer>();
+    Method method = list.getClass().getMethod("add", Object.class);
+    method.invoke(list, "Java反射机制实例");
+    System.out.println(list.get(0));
+}
+```
+
+这也侧面测实了类型擦除，JVM 不认识泛型。
+
 #### 泛型中 K T V E ? Object 等分别代表什么含义?
 
 - E – Element (在集合中使用，因为集合中存放的是元素)
@@ -385,9 +400,50 @@ JVM 是不认识泛型的，类型擦除指的是编译器在编译时把泛型�
 
 `<? super T>` 表示类型下界（Java Core 中叫超类型限定），表示参数化类型是此类型的超类型（父类型），直至 Object。
 
-#### 什么是SPI，和API有什么区别？
+> 在使用 限定通配符的时候，需要遵守 PECS 原则，即 Producer Extends, Consumer Super；上界生产，下界消费
+> 如果要从集合中读取类型T的数据，并且不能写入，可以使用 ? extends 通配符；(Producer Extends)
+> 如果要从集合中写入类型T的数据，并且不需要读取，可以使用 ? super 通配符；(Consumer Super)
+>
+> extends 的时候是可读取不可写入，那为什么叫上界生产呢？
+> 因为这个消费者/生产者描述的<集合>，当我们从集合读取的时候，集合是生产者。
+>
+> 如果既要存又要取，那么就不要使用任何通配符。
+
+通俗点讲，
+
+`? extends T` 限制了上界，一般是获取 T 来做点什么；
+
+`? super T` 限制了下界，安全性更好，一般是用来把 T 存到某个地方。
+
+#### 数组协变和泛型非协变
+
+Object 是 String 的父类，所以 `Object[]` 同样是 `String[]` 的父类，这就是数组协变；
+
+但是对于泛型来说，`List<Object>` 和 `List<String>` 毫无关系，无法赋值，这就是泛型非协变；
+
+协变是一种类型系统的特性，它指的是【类型的子类型关系】与【类型参数的子类型关系】保持一致。
+
+```java
+// 如果泛型允许协变
+List<Object> a = new List<String>();
+// a 可以 add 任意对象，但实际是一个 List<String> 实例，这就有问题了
+a.add(1); // 允许协变，可以装进来
+String s = a.get(0); // 编译报错
+```
+
+#### 什么是 SPI，和 API 有什么区别？
+
+SPI 是 Service Provider Interface 服务提供商接口，一种用于定义服务提供商与应用程序之间通信的接口，通常用于实现模块化和可插拔的系统。最常见的就是数据库驱动加载接口、还有 SLF4J 接口加载不同提供商的日志实现类、Spring 中也大量使用了 SPI（比如一些初始化器、自动类型转换接口）。
+
+API 就是我们平常应用开发使用的接口，主要作用就是制定规范，约束实现类。
+
+**SPI 的实现原理**
+
+其实就是通过 `ServiceLoader.load(Class, ClassLoader)` 这个方法，加载 `/META-INF/services/` 目录下的文件，这里的文件都是以接口的全限定名命名的，它会根据传入的 Class 对象找到对应文件，然后把文件中所有的类加载出来，最后再通过迭代器遍历使用。
 
 #### 什么是反射机制？为什么反射慢？
+
+
 
 #### Java 中创建对象有哪几种方式？
 
