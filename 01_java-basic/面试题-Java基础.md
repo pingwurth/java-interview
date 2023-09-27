@@ -443,11 +443,55 @@ API 就是我们平常应用开发使用的接口，主要作用就是制定规�
 
 #### 什么是反射机制？为什么反射慢？
 
+反射允许我们在程序运行时动态地查找、使用和修改类、接口、字段、方法等信息。
 
+反射非常强大，可以帮我们简化很多非业务逻辑的开发工作，我们平常用的框架也都大量地应用反射：Spring 的依赖注入和 aop、Spring MVC 的请求处理流程、MyBatis 的映射器、Hibernate-Validator 数据校验框架、Swagger、单元测试框架等。
+
+我觉得反射就是 Java 生态的根基，没有反射 Java 不可能有现在这么强大的生态。
+
+**不过反射也有缺点：**
+
+因为反射是在运行时动态解析和查找类、方法、字段等信息，相比于直接调用静态绑定的方法或访问字段，需要更多的时间和计算资源；
+
+反射不能享受一些编译器优化，性能上有所损失；
 
 #### Java 中创建对象有哪几种方式？
 
+- new 关键字
+- 反射
+- clone，需要实现 Cloneable 接口，如果没有重写 clone 方法就调用 Object 类的 native 方法完成
+- 反序列化
+- 方法句柄(JDK7+)
+
+```java
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+
+public class Main {
+    public static void main(String[] args) throws Throwable {
+        // 获取句柄
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+        // 可以看作 add 方法的引用
+        MethodHandle addHandle = lookup.findStatic(
+            Main.class, 
+            "add", 
+            MethodType.methodType(int.class, int.class, int.class));
+
+        // 使用句柄调用方法
+        int result = (int) addHandle.invokeExact(5, 3);
+        System.out.println("Result: " + result);
+    }
+
+    public static int add(int a, int b) {
+        return a + b;
+    }
+}
+```
+
 #### Java 的动态代理如何实现？
+
+
 
 #### Java 注解的作用
 
