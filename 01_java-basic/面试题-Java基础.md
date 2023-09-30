@@ -37,7 +37,7 @@ Java 必须使用面向对象的程序设计方式，而 C++ 允许使用面向�
 
 Java 只允许单继承，需要多继承的情况得使用接口，C++ 支持多重继承，包括虚拟继承。
 
-[引导方向 -> 值传递](#)
+[引导方向 -> 值传递](#reference_passing)
 
 C++ 支持指针（存地址，移位读数据）、引用、传值调用，但 Java 只有值传递。
 
@@ -181,6 +181,12 @@ str = (new StringBuilder()).append(str).append(s).toString();
 
 频繁创建对象会造成内存资源浪费，还增加程序运行时间。
 
+#### String 是如何实现不可变的？
+
+String 类用 final 修饰，意味着它无法被继承，方法不会被覆盖；存放字符串内容的 `char[]` 也是用 final 修饰的；
+
+我们平时修改字符串的操作，实际上都是 `new String` 实现的，本质上是数组的拷贝操作。
+
 #### String 为什么设计成不可变的？
 
 String 被设计为不可变的主要是考虑了安全性、性能和线程安全的问题。
@@ -205,6 +211,12 @@ String 被设计为不可变的主要是考虑了安全性、性能和线程安�
 #### String a = "ab"; String b = "a" + "b"; a == b 吗？
 
 结果为 true，`==` 比较的是地址，因为 a 和 b 都是由字面量组成的字符串，在编译之后会把字面量拼接在一起，实际运行的时候只有 `"ab"` 这个字符串对象，变量 a 和变量 b 指向同一个字符串对象。
+
+#### 字符串常量是什么时候进入常量池的？
+
+类加载的解析阶段，会把编译期生成的各种字面量和符号引用转换为直接引用，字符串常量就是这时候进入运行时常量池的。
+
+这个动作可以在验证阶段就进行，也可以准备阶段之后进行，还可以在字符串字面量被调用时才进行；前两种是静态解析，后一种是动态解析，HotSpot 就是当字符串字面量被调用时，才会进行解析，开始为它在字符串常量池中创建对应的 String 实例。
 
 #### 字符串有长度限制吗？
 
@@ -491,50 +503,645 @@ public class Main {
 
 #### Java 的动态代理如何实现？
 
+有两种方式：JDK 动态代理和 Cglib 动态代理。
 
+**JDK 动态代理 - 核心 Proxy#getProxyInstance**
+
+要求被代理类必须实现至少一个接口，然后定义一个 InvocationHandler 实现类就行，在 invoke 方法里写你的代理逻辑，这里就随意发挥了。
+
+当然，你还要声明一个成员变量，用来接收要代理的目标对象，一般会定义一个 `public Object getProxy(Object target)` 方法来接收要代理的目标对象并使用 `Proxy.newProxyInstance(ClassLoader, Class<?>[], InvocationHandler)` 返回代理对象，供外部使用。
+
+【原理】
+
+JDK 动态代理的原理，其实就是 Proxy 的 newProxyInstance 这个方法帮我们生成了代理类的字节码文件，然后进行类加载、再反射构造出代理实例返回，这个方法接收了 3 个参数：
+
+- 目标对象的 ClassLoader
+- 目标对象实现的所有接口
+- 一个 InvocationHandler 对象
+
+很明显啊， `ClassLoader` 是用来加载代理类的，那这个代理类是怎么来的呢，就是 `newProxyInstance` 方法帮我们生成的，是以 `byte[]` 的形式存在的，但是如果你想生成 class 文件，通过修改一个系统属性就可以实现了：
+
+```java
+System.setProperty("sun.misc.ProxyGenerator.saveGeneratedFile", true);
+```
+
+`newProxyInstance` 方法的另外两个参数就是生成这个代理类需要的内容了，很明显生成的代理类会实现目标对象实现的接口，代理的方法会调用 `InvocationHandler` 的 `invoke` 方法。
+
+通过查看反编译查看生成的代理类文件，可以验证这些猜测：
+
+生成的代理类是 final 修饰的，不仅实现了目标对象实现的接口，还继承了 Proxy 类，代理类的构造函数会接收 `InvocationHandler` 这个对象，然后通过 super 关键字调用 Proxy 的构造器，传递给 Proxy 中定义 `InvocationHandler` 变量。
+
+生成的代理方法都是通过调用 `InvocationHandler` 对象的 `invoke` 方法实现的，包括 equals、toString、hashCode 这些方法。调用 invoke 方法需要的 Method 对象，都是通过反射获取的。
+
+```java
+package com.sun.proxy;
+
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.lang.reflect.UndeclaredThrowableException;
+import structurepattern.proxy.jdkdynamicproxy.IPerson;
+
+// final 类，继承 Proxy，实现了目标对象的父接口
+public final class $Proxy0 extends Proxy implements IPerson {
+    private static Method m1;
+    private static Method m3;
+    private static Method m2;
+    private static Method m0;
+
+    // 构造函数接收一个 InvocationHandler 参数
+    // Proxy.newProxyInstance 方法接收的 InvocationHandler 就是为了传给此处的
+    public $Proxy0(InvocationHandler var1) throws  {
+        super(var1);
+    }
+
+    // 接口继承的方法全部分派了 InvocationHandler 的 invoke 方法
+    public final void findLove() throws  {
+        try {
+            super.h.invoke(this, m3, (Object[])null);
+        } catch (RuntimeException | Error var2) {
+            throw var2;
+        } catch (Throwable var3) {
+            throw new UndeclaredThrowableException(var3);
+        }
+    }
+
+    // Object 继承过来的 equals、toString、hashCode 也被覆盖了，全部去调用 InvocationHandler#invoke
+    public final boolean equals(Object var1) throws  {
+        return (Boolean)super.h.invoke(this, m1, new Object[]{var1});
+    }
+    
+    public final String toString() throws  {
+        return (String)super.h.invoke(this, m2, (Object[])null);
+    }
+
+    public final int hashCode() throws  {
+        return (Integer)super.h.invoke(this, m0, (Object[])null);
+    }
+
+    // 静态代码块：通过 Class.forName("类的全限定名") 的方法得到类对象再 getMethod 得到 Method 对象
+    // Method 对象作为 InvocationHandler 的 invoke 方法的入参
+    static {
+        try {
+            m1 = Class.forName("java.lang.Object").getMethod("equals", Class.forName("java.lang.Object"));
+            m3 = Class.forName("structurepattern.proxy.jdkdynamicproxy.IPerson").getMethod("findLove");
+            m2 = Class.forName("java.lang.Object").getMethod("toString");
+            m0 = Class.forName("java.lang.Object").getMethod("hashCode");
+        } catch (NoSuchMethodException var2) {
+            throw new NoSuchMethodError(var2.getMessage());
+        } catch (ClassNotFoundException var3) {
+            throw new NoClassDefFoundError(var3.getMessage());
+        }
+    }
+}
+```
+
+**Cglib 动态代理 - 核心 Enhancer#create()**
+
+Cglib 动态代理，不要求被代理类实现接口，只需定义一个 `MethodInterceptor` 实现类就行，然后在 `intercept` 方法中实现代理逻辑。
+
+同样地，定义一个 `public Object getProxy(Class clazz)` 方法，调用 `Enhancer` 的 `create()` 方法返回代理类实例。
+
+【原理】
+
+与 JDK 动态代理的原理类似，不过它生成了 3 个 class 字节码文件：
+
+- 增强代理类，继承了代理的目标对象，实现了  `net.sf.cglib.proxy.Factory` 接口
+- 代理类的 FastClass
+- 被代理类的 FastClass
+
+增强代理类的初始化过程分两步，
+
+第一步是静态常量的初始化，调用增强代理类的 `CGLIB$SET_THREAD_CALLBACKS` 方法将 `MethodInterceptor` 存入 ThreadLocal，调用这个方法之前触发了代理类的 static 初始化代码块，执行了一些 static 常量的初始化，主要有 `Method` 对象（反射创建）、`MethodProxy` 对象（MethodProxy#create）、`ThreadLocal` 对象、还有一个 object 空数组。
+
+第二步是调用构造函数，就是把刚刚存入 ThreadLocal 的 `MethodInterceptor` 对象赋给代理类的成员变量。
+
+方法的调用就是通过 `MethodInterceptor` 的 `intercept` 方法实现， `intercept` 方法就是我们自定义的逻辑了，这里要注意，不要直接调用 `MethodProxy` 的 `invoke` 方法，否则会因无限递归导致 `StackOverflowError`，如果一定要调，必须设置退出条件，调用 invoke 方法相当于一直在递归 `intercept` 方法。正确的用法是调用 `invokeSuper` 方法，这样执行的是被代理类的方法逻辑，就不会发生递归调用。
+
+<font title="red">FastClass 的作用是什么呢？</font>
+
+在调用 MethodProxy 的 invokeSuper 方法时，会先执行一个 init() 方法，去创建代理类和被代理类的 FastClass 增强类，并设置当前代理方法的索引值；init 完成后，就可以通过 FastClass 的 invoke 方法，根据给定的 index 找到要目标对象的方法并执行。这个索引值时根据方法签名来确定的。
+
+FastClass 中的关键方法就 getIndex 和 invoke。getIndex 根据方法签名返回索引值，invoke 根据索引值调用指定方法并执行。
+
+> Cglib 是通过继承来生成的动态代理类，如果一个类被 final 修饰，是无法使用 Cglib 做动态代理的。
 
 #### Java 注解的作用
 
+Java 注解可以用来标记接口、类、方法、属性、或者其他注解，然后给它们设置一些元数据。
+
+然后搭配反射，实现一些非业务逻辑的功能。
+
+| 元注解（用来定义其他注解的） | 作用                                                         |
+| ---------------------------- | ------------------------------------------------------------ |
+| `@Target`                    | 表示注解可以作用于什么地方，value 可以是类、字段、方法、参数、构造器等，详见：`java.lang.annotation.ElementType` |
+| `@Retention`                 | 表示在什么级别保存该注解信息，有 3 种 value 值：`RetentionPolicy.SOURCE`、`RetentionPolicy.CLASS`、`RetentionPolicy.RUNTIME` |
+| `@Documented`                | 被标记的注解会出现在 Java API 文档中                         |
+| `@Inherited`                 | 被标记的注解支持继承                                         |
+
 #### 说一说 Java 序列化的原理
+
+Java 序列化是将对象转换为字节流，以便在网络上传输或保存在本地文件中。
+
+在 Java 中，通过调用 `ObjectOutputStream#writeObject(Object obj)` 方法将对象序列化，对象必须是字符串、数组、枚举或实现了 `Serializable` 接口，否则会抛 `NotSerializableException`。
+
+另外，也可以实现 `Externalizable` 接口，实现 writeExternal 和 readExternal 方法指定序列化哪些属性。
 
 #### serialVersionUID 有何用途? 如果没定义会有什么问题？
 
-#### 你知道 fastjson 的反序列化漏洞吗？
+这是用来表示序列化版本的唯一ID，如果没有定义，JVM 会自动生成，只要 class 文件没有发生变化，不管编译多少次 serialVersionUID 都不变，一旦文件发生变化 serialVersionUID 也会跟着变；
+
+反序列化的时候会检查字节流中的 serialVersionUID 和 class 文件当前的 serialVersionUID，如果不一致，就会抛 InvalidCastException。
 
 #### Java 中异常分哪两类，有什么区别？
 
-#### 以下关于异常处理的代码有哪些问题？
+受检（checked）异常和非受检（unchecked）异常。
+
+受检异常必须处理，不然编译不过去，这是强制规范；非受检异常不用显示捕获，一般就是指运行时异常，这种异常可以理解为是代码有问题导致的，应该在编码的时候避免。
 
 #### finally 中代码一定会执行吗？
 
+不一定，有些情况 finally 是不会执行的，比如：
+
+1. `System.exit()` 方法被执行，强制退出程序
+2. `Runtime.getRuntime().halt()` 方法被执行，强制终止 JVM
+3. try 或者 catch 中有死循环
+4. 操作系统强制杀掉了 JVM 进程，比如执行了`kill -9`
+5. 其他原因导致的虚拟机崩溃了
+6. 虚拟机所运行的环境挂了，如计算机电源断了
+7. 如果一个 finally 是由守护线程执行的，那么是不保证一定能执行的，如果这时候 JVM 要退出，JVM 会检查其他非守护线程，如果都执行完了，那么就直接退出了。这时候 finally 可能就没办法执行完。
+
 #### Java 中的枚举有什么特点和好处？
+
+枚举一般用于需要一组常量对象的场景。枚举可以自定义属性，扩展性强；还提供了 valueOf 获取枚举对象，使用起来代码简洁。
+
+枚举本质上是一个继承了 `java.lang.Enum` 的 final 类，我们声明的枚举实例本质上是 `public static final` 修饰的常量，这些实例会维护到一个 `$VALUES[]` 数组中，也是 `public static final` 修饰的，枚举默认还提供了 `values()` 方法返回所有实例的数组 `$VALUES[]` 的克隆对象。
+
+```java
+public final class Size extends Enum {
+
+    public static Size[] values() {
+        return (Size[]) $VALUES.clone();
+    }
+
+    public static Size valueOf(String name) {
+        return (Size) Enum.valueOf(EnumTest$Size, name);
+    }
+
+    public String getAbbreviation() {
+        return abbreviation;
+    }
+
+    public static final Size SMALL;
+    public static final Size MEDIUM;
+    public static final Size LARGE;
+    public static final Size EXTRA_LARGE;
+    private String abbreviation;
+    private static final Size $VALUES[];
+
+    static {
+        SMALL = new Size("SMALL", 0, "S");
+        MEDIUM = new Size("MEDIUM", 1, "M");
+        LARGE = new Size("LARGE", 2, "L");
+        EXTRA_LARGE = new Size("EXTRA_LARGE", 3, "XL");
+        $VALUES = (new Size[]{
+                SMALL, MEDIUM, LARGE, EXTRA_LARGE
+        });
+    }
+
+    private Size(String s, int i, String abbreviation) {
+        super(s, i);
+        this.abbreviation = abbreviation;
+    }
+}
+```
+
+#### 为什么说枚举是实现单例最好的方式？
+
+枚举实现的单例有以下好处：
+
+- 代码实现简洁
+- 天然线程安全，在 static 代码块中创建的实例，只会执行一次
+- 可以避免反序列化破坏，`java.io.ObjectInputStream#readEnum` 反序列化的时候，枚举就是用 `java.lang.Enum#valueOf` 方法返回对象的。
 
 #### 什么是 AIO、BIO 和 NIO？
 
-#### Java 是值传递还是引用传递？
+**BIO （Blocking I/O）：**同步阻塞 I/O，是 JDK1.4 之前的传统 IO 模型。 线程发起 IO 请求后，一直阻塞，直到缓冲区数据就绪后，再进入下一步操作。
 
-#### 说一说是深拷贝和浅拷贝
+**NIO （Non-Blocking I/O）：**同步非阻塞 IO，线程发起 IO 请求后，不需要阻塞，立即返回。用户线程不原地等待 IO 缓冲区，可以先做一些其他操作，只需要定时轮询检查 IO 缓冲区数据是否就绪即可。
+
+**AIO （ Asynchronous I/O）：**异步非阻塞 I/O 模型。线程发起 IO 请求后，不需要阻塞，立即返回，也不需要定时轮询检查结果，异步 IO 操作之后会回调通知调用方。
+
+#### Java 中 BIO、NIO、AIO 分别适用哪些场景？
+
+BIO 方式适用于连接数目比较小且固定的架构，这种方式对服务器资源要求比较高，并发局限于应用中，JDK1.4 以前的唯一选择，但程序直观简单易理解。
+
+NIO 方式适用于连接数目多且连接比较短（轻操作）的架构，比如聊天服务器，并发局限于应用中，编程比较复杂，JDK1.4 开始支持。
+
+AIO 方式适用于连接数目多且连接比较长（重操作）的架构，比如相册服务器，充分调用 OS 参与并发操作，编程比较复杂，JDK7 开始支持。
+
+#### 同步、异步、阻塞、非阻塞怎么理解？
+
+阻塞、非阻塞描述的是调用者：
+
+- 阻塞表示调用者会一直等待结果的返回；
+- 非阻塞表示调用者发出调用指令后，不会一直傻傻地等结果，而是继续干别的事，是不是询问一下结果返回了吗。
+
+同步、异步描述的是被调用者：
+
+- 收到请求立即处理，处理完成再响应结果；
+- 收到请求立即响应结果，但不一定马上开始处理请求，反正处理完了会通知调用者。
+
+#### <span id="reference_passing">Java 是值传递还是引用传递？</span>
+
+值传递（pass-by-value）。
+
+基本类型传递的是值的副本，引用类型传递的是引用的值的副本，传递的都是副本，都发生了拷贝动作。
+
+![值传递和引用传递](../images/值传递和引用传递.png)
+
+#### 说一说深拷贝和浅拷贝
+
+拷贝就是字面意思，拷贝一份对象副本出来，浅拷贝对于引用类型只是拷贝引用地址，而深拷贝不管是基本类型还是引用类型会创建新的对象。
+
+`BeanUtils.copyProperties` 就是浅拷贝，深拷贝一般都是通过序列化 + 反序列化实现，比如 Apache commons lang 包的 `SerializationUtils#clone` 方法，或者借助 fastjson 提供的 API `JSON.parseObject(JSON.toJSONString(user), User.class)` 先把对象序列化为 json 字符串，再反序列化为对象。
+
+深拷贝还可以自己实现 clone() 方法，用递归算法实现。
 
 #### SimpleDateFormat 是线程安全的吗？使用时应该注意什么？
 
-#### 现在 JDK 的最新版本是什么？
+SimpleDateFormat 不是线程安全的，一般作为局部变量使用，防止多线程访问。
+
+SimpleDateFormat 用一个成员变量 calendar 来保存时间，不安全的原因就是调用 format 方法时会修改这个变量，多线程并发调用时，这个变量被多个线程改来改去，最后格式化出来的日期肯定是不符合预期的。
+
+除了加锁，也有推荐把 SimpleDateFormat 对象放到 ThreadLocal 的，这种方式也是可行的。
+
+JDK8 推荐使用 `DateTimeFormatter`，这是一个线程安全的日期格式化工具。
+
+- 字符串 -> 日期
+
+```java
+String dateStr= "2023年10月01日";
+DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy年MM月dd日");
+LocalDate date= LocalDate.parse(dateStr, formatter);
+```
+
+- 日期 -> 字符串
+
+```java
+LocalDateTime now = LocalDateTime.now();
+DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy年MM月dd日 hh:mm a");
+String nowStr = now.format(format);
+```
 
 #### JDK 新版本中都有哪些新特性？
 
+| JDK 版本 | 新特性                                    |
+| -------- | ----------------------------------------- |
+| JDK8     | Lambda 表达式、Stream、Optional、日期API  |
+| JDK9     | 模块化                                    |
+| JDK10    | 局部变量推断                              |
+| JDK12    | switch 表达式增强                         |
+| JDK13    | 文本块（多行字符串，以 `"""` 开始和结束） |
+| JDK14    | Records 记录类型、增强 instanceof         |
+| JDK15    | 封闭类                                    |
+| JDK17    | switch 匹配增强                           |
+| JDK19    | 结构化并发                                |
+| JDK21    | 虚拟线程、ZGC 增加了对分代的支持          |
+
+- **模块化【JDK9】**
+
+> 模块化允许开发者将应用程序拆分为更小、更可管理的模块，并定义模块之间的依赖关系。
+
+模块定义文件 module-info.java
+
+```java
+module com.example.greeting {
+    exports com.example.greeting;
+}
+```
+
+在 com.example.greeting 模块中创建一个类
+
+```java
+package com.example.greeting;
+
+public class Greeting {
+    public static String getGreeting() {
+        return "Hello, World!";
+    }
+}
+```
+
+定义一个模块，依赖 com.example.greeting 模块
+
+```java
+module com.example.app {
+    requires com.example.greeting;
+}
+```
+
+应用程序入口类
+
+```java
+package com.example.app;
+
+import com.example.greeting.Greeting;
+
+public class MainApp {
+    public static void main(String[] args) {
+        String greeting = Greeting.getGreeting();
+        System.out.println(greeting);
+    }
+}
+```
+
+编译命令
+
+```bash
+javac -d <output-directory> --module-source-path <source-directory> <module-info.java> <source-files>
+```
+
+运行命令
+
+```bash
+java --module-path <module-path> --module <module>/<main-class>
+```
+
+
+
+- **局部变量推断【JDK10】**
+
+```java
+public class LocalVariableExample {
+    public static void main(String[] args) {
+        var message = "Hello, World!"; // 使用 var 推断字符串类型
+        var count = 10; // 使用 var 推断整数类型
+        var list = new ArrayList<String>(); // 使用 var 推断 ArrayList 类型
+        
+        System.out.println(message); // 输出：Hello, World!
+        System.out.println(count); // 输出：10
+        
+        list.add("Apple");
+        list.add("Banana");
+        list.add("Orange");
+        
+        for (var fruit : list) { // 使用 var 推断循环变量类型
+            System.out.println(fruit);
+        }
+    }
+}
+```
+
+
+
+- **switch 表达式增强【JDK12】**
+
+```java
+public class SwitchExpressionExample {
+    public static void main(String[] args) {
+        int dayOfWeek = 3;
+        String dayType = switch (dayOfWeek) {
+            case 1, 2, 3, 4, 5 -> "Weekday";
+            case 6, 7 -> "Weekend";
+            default -> "Invalid day";
+        };
+
+        System.out.println(dayType);  // 输出：Weekday
+    }
+}
+```
+
+
+
+- **文本块【JDK13】**
+
+```java
+public class TextBlockExample {
+    public static void main(String[] args) {
+        String traditionalString = "This is a traditional\n"
+                                  + "multi-line string\n"
+                                  + "in Java.";
+
+        String textBlock = """
+                           This is a text block
+                           that spans multiple
+                           lines in Java.
+                           """;
+
+        System.out.println("Traditional String:\n" + traditionalString);
+        System.out.println("\nText Block:\n" + textBlock);
+    }
+}
+```
+
+
+
+- **Records 记录类型【JDK14】**
+
+```java
+/**
+ * 通过使用 record 关键字，我们可以自动生成构造函数、访问器方法以及 equals() 和 hashCode() 等方法
+ */
+record Person(String name, int age) {}
+
+public class RecordsExample {
+    public static void main(String[] args) {
+        Person person = new Person("John Doe", 30);
+        System.out.println(person.name());  // 输出：John Doe
+        System.out.println(person.age());   // 输出：30
+    }
+}
+```
+
+
+
+- **增强 instanceof【JDK14】**
+
+```java
+public class PatternMatchingExample {
+    public static void main(String[] args) {
+        Object obj = "Hello, World!";
+        
+        if (obj instanceof String str) {
+            // 在这里，我们使用 `instanceof` 模式匹配，并将匹配的对象转换为新的变量 `str`
+            System.out.println(str.toUpperCase());
+        } else {
+            System.out.println("Not a string");
+        }
+    }
+}
+```
+
+
+
+- **封闭类【JDK15】**
+
+```java
+/**
+ * 能够继承 Shape 的类被限制了：Circle, Rectangle, Triangle
+ */
+sealed class Shape permits Circle, Rectangle, Triangle {
+    // Shape 类的定义
+}
+
+final class Circle extends Shape {
+    // Circle 类的定义
+}
+
+final class Rectangle extends Shape {
+    // Rectangle 类的定义
+}
+
+final class Triangle extends Shape {
+    // Triangle 类的定义
+}
+
+class Square extends Shape {
+    // Square 类的定义
+    // 这里会产生编译错误，因为 Square 类没有在 permits 列表中被允许
+}
+```
+
+
+
+- **switch...case 匹配增强【JDK17】**
+
+```java
+public class SwitchPatternMatchingExample {
+    public static void main(String[] args) {
+        Object obj = "Hello";
+
+        // case 支持类型匹配，还可以多条件匹配，支持各种运算符
+        String result = switch (obj) {
+            case String s -> "It's a string: " + s;
+            case Integer i && i > 0 -> "It's a positive integer: " + i;
+            case Integer i -> "It's an integer: " + i;
+            case null -> "It's null";
+            default -> "It's something else";
+        };
+
+        System.out.println(result);
+    }
+}
+```
+
+
+
+- **结构化并发【JDK19】**
+
+```java
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+
+public class StructuredConcurrencyDemo {
+
+    public static void main(String[] args) {
+        try {
+            structuredConcurrencyDemo();
+        } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void structuredConcurrencyDemo() throws InterruptedException, ExecutionException {
+        CompletableFuture<Void> mainTask = CompletableFuture.runAsync(() -> {
+            System.out.println("主任务开始...");
+
+            // 子任务 1
+            CompletableFuture<Void> subTask1 = CompletableFuture.runAsync(() -> {
+                System.out.println("子任务 1 开始...");
+                // 执行一些工作
+                System.out.println("子任务 1 完成");
+            });
+
+            // 子任务 2
+            CompletableFuture<Void> subTask2 = CompletableFuture.runAsync(() -> {
+                System.out.println("子任务 2 开始...");
+                // 执行一些工作
+                System.out.println("子任务 2 完成");
+            });
+
+            // 等待所有子任务完成
+            CompletableFuture.allOf(subTask1, subTask2).join();
+
+            System.out.println("主任务完成");
+        });
+
+        // 等待主任务完成
+        mainTask.get();
+    }
+}
+
+```
+
+
+
+- **虚拟线程【JDK21】**
+
+```java
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class VirtualThreadExample {
+
+    public static void main(String[] args) {
+        // 创建 ExecutorService，每个虚拟线程对应一个任务
+        ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+
+        // 提交 100 个任务，每个任务都是一个虚拟线程
+        for (int i = 0; i < 100; i++) {
+            final int taskNumber = i;
+            executor.submit(() -> {
+                System.out.println("Task executed by Virtual Thread " + taskNumber);
+                // 模拟任务的一些工作
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            });
+        }
+
+        // 关闭 ExecutorService
+        executor.shutdown();
+    }
+}
+
+```
+
+
+
 #### 什么是 UUID，能保证唯一吗？
+
+Version 1 和 Version 2 这两个版本的UUID，主要基于时间和 MAC 地址，所以比较适合应用于分布式计算环境下，具有高度唯一性。
+
+Version 3 和 Version 5 这两种 UUID 都是基于名称空间的，所以在一定范围内是唯一的，而且如果有需要生成重复 UUID 的场景的话，这两种是可以实现的。
+
+Version 4 这种是最简单的，只是基于随机数生成的，但是也是最不靠谱的，适合数据量不是特别大的场景下。
 
 #### char 能存储中文吗？
 
+在 Java 中，char 类型是用来表示一个 16 位的 Unicode 字符，它可以存储任何 Unicode 字符集中的字符，当然也包括中文字符。
+
 #### while(true) 和 for(;;) 哪个性能好？
+
+性能一样，使用 javap 反编译后，内容一摸一样。
 
 #### ClassNotFoundException 和 NoClassDefFoundError 的区别是什么？
 
+ClassNotFoundException 是类加载时找不到指定的 class 就会抛出，一般是依赖缺失导致的。
+
+NoClassDefFoundError 是找到了 class 但加载、解析或链接时发生了问题，一般是依赖冲突导致的，或打包问题（编译时存在，运行时丢了）。
+
 #### 为什么 JDK 9 中把 String 的 char[] 改成了 byte[]？
 
-#### Arrays.sort 是使用什么排序算法实现的？
+java 内部是使用 UTF-16 来编码的，每一个字符占据 2 个字节；但是一些简单得字符，如：ISO8859-1(Latin1) 当中的字符单字节就能表示了，但是在字符串当中还是得用 char，也就是两个字节来表示，这就有点浪费了，于是从 jdk9 开始就废弃了 `char[]` 改用了 `byte[]`，并加入了一个编码标识符：
 
-#### String是如何实现不可变的？
+```java
+private final byte coder;
+```
 
-#### 字符串常量是什么时候进入到字符串常量池的？
+- coder 等于 0，表示  LATIN1 编码，即 1 个字节代表 1 个字符；
 
-#### 说一说 String 中 intern() 方法
+- coder 等于 1，表示 UTF-16 编码，即 2 个字节代表 1 个字符。
