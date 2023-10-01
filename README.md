@@ -50,7 +50,7 @@ GitHub stars 最高的 Java 项目
 
 ## Java 集合
 
-
+[面试题-Java集合](./02_java-collection/面试题-Java集合.md)
 
 ## Java 并发
 
@@ -112,7 +112,7 @@ GitHub stars 最高的 Java 项目
 
 
 
-## 架构
+## 架构设计
 
 GitHub stars 228k+ 系统设计入门
 
