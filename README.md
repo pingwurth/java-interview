@@ -7,6 +7,15 @@ Java 八股文
 
 - https://www.yuque.com/hollis666/ca2plb
 
+Java 面试八股文
+
+- https://github.com/itwanger/toBeBetterJavaer
+- https://javabetter.cn/sidebar/sanfene/nixi.html
+
+Java 学习 + 面试指南
+
+- https://github.com/Snailclimb/JavaGuide
+
 GitHub 中文资料榜 - Java
 
 - https://github.com/GrowingGit/GitHub-Chinese-Top-Charts/blob/master/content/charts/overall/knowledge/Java.md
@@ -19,17 +28,9 @@ GitHub stars 最高的 Java 项目
 
 - https://github.com/CyC2018/CS-Notes
 
-Java 学习 + 面试指南
-
-- https://github.com/Snailclimb/JavaGuide
-
 互联网 Java 工程师进阶知识完全扫盲
 
 - https://github.com/doocs/advanced-java
-
-Java 面试八股文
-
-- https://github.com/itwanger/toBeBetterJavaer
 
 完整的开源电商系统
 
@@ -44,8 +45,6 @@ Java 面试八股文
 - https://github.com/geekxh/hello-algorithm
 
 ## Java 基础
-
-
 
 [面试题-Java基础](./01_java-basic/面试题-Java基础.md)
 
