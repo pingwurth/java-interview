@@ -1,6 +1,4 @@
 # java-interview
-**Java面试指南**
-
 ## 学习资料
 
 Java 八股文
@@ -118,7 +116,7 @@ GitHub stars 228k+ 系统设计入门
 
 - https://github.com/donnemartin/system-design-primer/blob/master/README-zh-Hans.md
 
-
+## 项目 + 技术
 
 ## 其他技术
 
