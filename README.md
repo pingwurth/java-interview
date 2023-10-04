@@ -42,6 +42,11 @@ GitHub stars 最高的 Java 项目
 
 - https://github.com/geekxh/hello-algorithm
 
+mooc 精选
+
+- Java 源码：https://www.imooc.com/read/47
+- Java 面试题：https://www.imooc.com/read/67
+
 ## Java 基础
 
 [面试题-Java基础](./01_java-basic/面试题-Java基础.md)
@@ -52,7 +57,7 @@ GitHub stars 最高的 Java 项目
 
 ## Java 并发
 
-
+[面试题-Java并发](./03_java-concurrent/面试题-Java并发.md)
 
 ## Java 虚拟机
 
