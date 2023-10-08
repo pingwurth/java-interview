@@ -157,6 +157,10 @@ CopyOnWriteArrayList 适合读多写少的场景，经常更新的场景使用 C
 
 也可以自己根据实际情况进行同步控制，不推荐。
 
+#### LinkedList 为什么不能实现 RandomAccess 接口？
+
+由于 `LinkedList` 底层数据结构是链表，内存地址不连续，只能从头部或尾部开始使用 prev 和 next 引用进行遍历，不支持随机快速访问，所以不能实现 `RandomAccess` 接口。
+
 ### 深入源码
 
 #### ArrayList 无参数构造器构造，现在 add 一个值进去，此时数组的大小是多少，下一次扩容前最大可用大小是多少？

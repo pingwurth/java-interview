@@ -15,6 +15,8 @@ Java 面试八股文
 
 Java 学习 + 面试指南
 
+- https://javaguide.cn/home.html
+
 - https://github.com/Snailclimb/JavaGuide
 
 技术面试必备基础知识、Leetcode、计算机操作系统、计算机网络、系统设计
@@ -82,9 +84,15 @@ mooc 精选
 
 [ArrayList & LinkedList 源码解析](https://mrbird.cc/LinkedList-ArrayList%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90.html)
 
+[ArrayList 核心源码 + 扩容机制](https://github.com/Snailclimb/JavaGuide/blob/main/docs/java/collection/arraylist-source-code.md)
+
+[LinkedList 核心源码](https://github.com/Snailclimb/JavaGuide/blob/main/docs/java/collection/arraylist-source-code.md)
+
 [Vector 源码解析](https://mrbird.cc/Vector%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90.html)
 
 [HashMap 底层实现原理](https://mrbird.cc/Java-HashMap%E5%BA%95%E5%B1%82%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86.html)
+
+[HashMap 核心源码](https://github.com/Snailclimb/JavaGuide/blob/main/docs/java/collection/hashmap-source-code.md)
 
 [HashSet 源码解析](https://mrbird.cc/HashSet%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90.html)
 
@@ -96,7 +104,19 @@ mooc 精选
 
 [CopyOnWriteArrayList 源码解析](https://mrbird.cc/CopyOnWriteArrayList%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90.html)
 
+[CopyOnWriteArrayList 核心源码分析](https://github.com/Snailclimb/JavaGuide/blob/main/docs/java/collection/copyonwritearraylist-source-code.md)
+
 [CopyOnWriteArraySet 源码解析](https://mrbird.cc/CopyOnWriteArraySet%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90.html)
+
+[ConcurrentHashMap 核心源码](https://github.com/Snailclimb/JavaGuide/blob/main/docs/java/collection/concurrent-hash-map-source-code.md)
+
+[LinkedHashMap 核心源码](https://github.com/Snailclimb/JavaGuide/blob/main/docs/java/collection/linkedhashmap-source-code.md)
+
+[ArrayBlockingQueue 核心源码分析](https://github.com/Snailclimb/JavaGuide/blob/main/docs/java/collection/arrayblockingqueue-source-code.md)
+
+[PriorityQueue 核心源码分析](https://github.com/Snailclimb/JavaGuide/blob/main/docs/java/collection/priorityqueue-source-code.md)
+
+[DelayQueue 核心源码分析](https://github.com/Snailclimb/JavaGuide/blob/main/docs/java/collection/delayqueue-source-code.md)
 
 
 
