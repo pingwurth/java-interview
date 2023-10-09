@@ -4,7 +4,7 @@
 
 ## 学习资料
 
-Java 八股文
+Hollis 的 Java 八股文（需要购买，抖音搜<font title=red>"程序员Hollis"</font>）
 
 - https://www.yuque.com/hollis666/ca2plb
 
@@ -49,12 +49,7 @@ GitHub stars 最高的 Java 项目
 
 Java 超全技术栈学习
 
-- https://mrbird.cc/archives/
-
-mooc 精选
-
-- Java 源码：https://www.imooc.com/read/47
-- Java 面试题：https://www.imooc.com/read/67
+- https://mrbird.cc/tags/
 
 ## Java 基础
 
@@ -122,7 +117,7 @@ mooc 精选
 
 [mooc 推荐：系统精讲 Java 源码及大厂真题](https://www.imooc.com/read/47)
 
-- [百度网盘](https://pan.baidu.com/s/1h8xITKNohm24pgrrpD7aRA?pwd=2kt3)
+- [学习笔记（百度网盘）](https://pan.baidu.com/s/1h8xITKNohm24pgrrpD7aRA)
 
 ## Java 并发
 
