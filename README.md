@@ -125,7 +125,7 @@ Java 超全技术栈学习
 
 <blockquote alt="info"><p>学习方式：书 + 视频 + coding</p></blockquote>
 
-
+[Gitee - 并发学习笔记](https://gitee.com/pingWurth/study-notes/blob/master/java-thread/Java%E5%A4%9A%E7%BA%BF%E7%A8%8B%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0.md)
 
 ## Java 虚拟机
 
