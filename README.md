@@ -1,6 +1,6 @@
 # java-interview
 
-# [以下所有加密学习笔记 or 资源点击这里获取，密码：7777](https://pan.baidu.com/s/1bSkP-uI-vA3B7v-Ncs3Zvg)
+# [文中包含的加密资源/学习笔记，从这里获取提取码，密码：7777](https://pan.baidu.com/s/1bSkP-uI-vA3B7v-Ncs3Zvg)
 
 > [JDK 21 Documentation](https://docs.oracle.com/en/java/javase/21/)
 
@@ -224,7 +224,7 @@ Java 学习 + 面试指南
 
 - [学习笔记]()
 
-[Java生产环境下性能监控与调优详解（喊 JVM 调优内容](https://coding.imooc.com/class/241.html)
+[Java生产环境下性能监控与调优详解（含 JVM 调优内容）](https://coding.imooc.com/class/241.html)
 
 - [学习笔记]()
 
