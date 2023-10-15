@@ -10,8 +10,9 @@ Hollis 的 Java 八股文（需要购买，抖音搜<font title=red>"程序员Ho
 
 Java 面试八股文
 
-- https://github.com/itwanger/toBeBetterJavaer
 - https://javabetter.cn/sidebar/sanfene/nixi.html
+
+- https://github.com/itwanger/toBeBetterJavaer
 
 Java 学习 + 面试指南
 
