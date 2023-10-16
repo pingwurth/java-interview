@@ -230,17 +230,33 @@ Java 学习 + 面试指南
 
 ## 设计模式
 
+[面试题-设计模式](./05_design-pattern/面试题-设计模式.md)
+
+<blockquote alt="info"><p>学习方式：书 + 视频 + 笔记</p></blockquote>
+
 
 
 ## 开源框架
+
+[面试题-开源框架](./06_open-source-framework/面试题-开源框架.md)
+
+<blockquote alt="info"><p>学习方式：书 + 源码 + 笔记 + UML 图 + 视频</p></blockquote>
 
 
 
 ## 数据库
 
+[面试题-数据库](./07_database/面试题-数据库.md)
+
+<blockquote alt="info"><p>学习方式：书 + 视频 + 笔记</p></blockquote>
+
 
 
 ## 分布式系统
+
+[面试题-分布式系统](./08_distributed-system/面试题-分布式系统.md)
+
+<blockquote alt="info"><p>学习方式：书 + 笔记 + 实战视频</p></blockquote>
 
 
 
@@ -248,7 +264,7 @@ Java 学习 + 面试指南
 
 [面试题-微服务](./09_microservice/面试题-微服务.md)
 
-> 学习方式：书 + 视频 + 实战
+<blockquote alt="info"><p>学习方式：书 + 视频 + 实战 + 源码 + UML 图</p></blockquote>
 
 [个人学习笔记](https://gitee.com/pingWurth/study-notes/blob/master/springcloud/SpringCloud%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0.md)
 
@@ -260,21 +276,43 @@ Java 学习 + 面试指南
 
 ## Redis
 
+[面试题-Redis](./10_redis/面试题-Redis.md)
+
+<blockquote alt="info"><p>学习方式：书 + 视频 + 实战</p></blockquote>
 
 
-## 消息队列
+
+## 分布式消息队列
+
+[面试题-分布式消息队列](./11_distributed-message-queue/面试题-分布式消息队列.md)
+
+<blockquote alt="info"><p>学习方式：书 + 视频 + 实战</p></blockquote> 
 
 
 
-## 搜索引擎
+## 分布式搜索引擎
+
+[面试题-分布式搜索引擎](./12_search-engine/面试题-分布式搜索引擎.md)
+
+<blockquote alt="info"><p>学习方式：书 + 视频 + 实战</p></blockquote> 
 
 
 
 ## 容器
 
+[面试题-容器](./13_container/面试题-容器.md)
+
+<blockquote alt="info"><p>学习方式：书 + 视频 + 实战</p></blockquote> 
+
 
 
 ## 架构设计
+
+[面试题-架构设计](./14_architecture-design/面试题-架构设计.md)
+
+<blockquote alt="info"><p>学习方式：书 + 视频 + 实战</p></blockquote> 
+
+
 
 GitHub stars 228k+ 系统设计入门
 
@@ -282,25 +320,51 @@ GitHub stars 228k+ 系统设计入门
 
 ## 项目 + 技术
 
+[面试题-项目+技术](./15_project-and-technology/面试题-项目+技术.md)
+
+<blockquote alt="info"><p>学习方式：实战 + 总结 + 思考 + 应用</p></blockquote> 
 
 
-## 场景题
+
+## 场景设计
+
+[面试题-场景设计](./16_scene-design/面试题-场景设计.md)
+
+<blockquote alt="info"><p>学习方式：实战 + 各种技术文章 + 各种自媒体</p></blockquote> 
 
 
 
 ## Linux
 
+[面试题-Linux](./17_linux/面试题-Linux.md)
+
+<blockquote alt="info"><p>学习方式：书 + 视频</p></blockquote> 
+
 
 
 ## 网络
+
+[面试题-网络](./18_network/面试题-网络.md)
+
+<blockquote alt="info"><p>学习方式：书 + 视频</p></blockquote> 
 
 
 
 ## 操作系统
 
+[面试题-操作系统](./19_operating-system/面试题-操作系统.md)
+
+<blockquote alt="info"><p>学习方式：书 + 视频</p></blockquote> 
+
 
 
 ## 数据结构与算法
+
+[面试题-数据结构与算法](./20_data-structures-and-algorithms/面试题-数据结构与算法.md)
+
+<blockquote alt="info"><p>学习方式：书 + 视频 + 持续练习</p></blockquote> 
+
+
 
 #### 电子书 pdf
 
