@@ -14,7 +14,7 @@ GitHub stars 最高的 Java 项目
 
 - https://github.com/search?q=stars%3A%3E1000+language%3AJava&type=repositories&l=Java&s=stars&o=desc
 
-#### 面试准备系列
+### 面试准备系列
 
 Hollis 的 Java 八股文（需要购买，抖音搜<font title=red>"程序员Hollis"</font>，购入体验：物超所值，强烈推荐！！！）
 
@@ -39,7 +39,7 @@ Java 学习 + 面试指南
 
 - https://github.com/CyC2018/CS-Notes
 
-#### 实战能力提升
+### 实战能力提升
 
 **设计模式**
 
@@ -57,7 +57,7 @@ Java 学习 + 面试指南
 
 - https://github.com/wuyouzhuguli/SpringAll
 
-#### 算法系列
+### 算法系列
 
 **LeetCode**
 
@@ -218,7 +218,7 @@ Java 学习 + 面试指南
 
 [体系课：Java架构师-技术专家（含 JVM 调优内容）](https://class.imooc.com/sale/javaarchitect)
 
-- [学习笔记]()
+- [学习笔记](https://pan.baidu.com/s/1hTRCMEM894KAGpQM08s5lQ)
 
 [Java性能调优 6步实现项目性能升级（含 JVM 调优内容）](https://coding.imooc.com/class/442.html)
 
@@ -240,13 +240,23 @@ Java 学习 + 面试指南
 
 
 
-## 分布式
+## 分布式系统
 
 
 
 ## 微服务
 
+[面试题-微服务](./09_microservice/面试题-微服务.md)
 
+> 学习方式：书 + 视频 + 实战
+
+[个人学习笔记](https://gitee.com/pingWurth/study-notes/blob/master/springcloud/SpringCloud%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0.md)
+
+[推荐学习资料](https://gitee.com/pingWurth/study-notes/blob/master/springcloud/SpringCloud%E5%AD%A6%E4%B9%A0%E8%B5%84%E6%96%99.md)
+
+#### 电子书 pdf
+
+#### 视频资源
 
 ## Redis
 
