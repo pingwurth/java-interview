@@ -156,7 +156,7 @@ Java 学习 + 面试指南
 
 #### 视频资源
 
-[系统解析JDK源码](https://coding.imooc.com/class/chapter/621.html#Anchor)
+[系统解析JDK源码](https://coding.imooc.com/class/chapter/621.html)
 
 - [学习笔记]()
 
