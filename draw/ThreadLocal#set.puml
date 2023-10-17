@@ -1,0 +1,62 @@
+' java.lang.ThreadLocal.set
+@startuml
+[-> ThreadLocal ++ : set(T value)
+    ThreadLocal -> ThreadLocal ++ : Thread t = Thread.currentThread()
+
+    ThreadLocal --
+
+    ThreadLocal -> ThreadLocal ++ : ThreadLocalMap map = getMap(t);
+        note right ThreadLocal
+            获取当前 Thread 的 threadLocals，这是一个 ThreadLocal.ThreadLocalMap
+
+            ThreadLocal 通过维护它来实现线程本地变量，ThreadLocalMap 中有一个 Entry 数组
+
+            Entry 继承 WeakReference，Entry 通过一个弱引用指向 ThreadLocal 实例
+            Entry 的 value 存放 set 的值
+        end note
+    return 返回 t.<color:red>threadLocals</color>
+
+    group <color:blue>if (map != null)
+        ThreadLocal -> ThreadLocal.ThreadLocalMap ++ : map.set(this, value)
+            note right of ThreadLocal.ThreadLocalMap #f7f1e3
+                1. 计算要存到哪个 index 位置：key.threadLocalHashCode & (len-1)
+
+                2. 如果 index 指向的位置已经有值，考虑两种情况：
+                ** 同一个 key （ThreadLocal），value 覆盖
+                ** key 已过期（ThreadLocal 被 GC 清理），替换过期的 Entry
+                都不符合，就判断下一个位置（index + 1）是否有空位。
+
+                3. 如果 index 指向的位置为 null 就可以直接存入
+                ** size + 1
+                ** 清理过期的 Entry，如果 Entry 数组中存在 referent（弱引用）为 null 的话
+                ** 如果没有可以清理的过期槽位，就需要判断容量是否达到阈值，达到就进行 <color:blue>rehash()
+                ** 再次清理过期的 Entry - <color:blue>expungeStaleEntries()
+                ** 清理结束，如果 size 还 ≥ threshold 的 3/4 就 <color:blue>resize()
+            end note
+        return
+    else <color:blue>else
+        ThreadLocal -> ThreadLocal ++ : createMap(t, value)
+        ThreadLocal -> ThreadLocal.ThreadLocalMap ++ : t.threadLocals = new ThreadLocalMap(this, firstValue)
+            note right of ThreadLocal.ThreadLocalMap
+                <color:green>// 创建 Entry 数组，初始容量 16
+                table = new Entry[INITIAL_CAPACITY];
+
+                <color:green>// 与运算替换取模操作，确定 index
+                <color:green>// threadLocalHashCode 取值: AtomicInteger.getAndAdd(HASH_INCREMENT)
+                <color:blue>// HASH_INCREMENT = 2^32 * (1 - 0.618) = 0x61c88647
+                <color:green>// 0.618 是黄金分割数，能够减少 hash 冲突
+                int i = firstKey.threadLocalHashCode & (INITIAL_CAPACITY - 1);
+
+                <color:green>// 初始值存入 Entry 数组
+                table[i] = new Entry(firstKey, firstValue);
+                size = 1;
+                <color:green>// 设置下一次进行 resize 的阈值（2/3 容量）
+                setThreshold(INITIAL_CAPACITY);
+            end note
+        return
+        ThreadLocal --
+    end
+
+    ThreadLocal -[hidden]> ThreadLocal
+ThreadLocal --
+@enduml
