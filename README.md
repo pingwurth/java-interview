@@ -2,9 +2,11 @@
 
 # [文中包含的加密资源/学习笔记，从这里获取提取码，密码：7777](https://pan.baidu.com/s/1bSkP-uI-vA3B7v-Ncs3Zvg)
 
-> [JDK 21 Documentation](https://docs.oracle.com/en/java/javase/21/)
-
 ## 学习资料大全！！！
+
+JDK 文档
+
+[JDK 21 Documentation](https://docs.oracle.com/en/java/javase/21/)
 
 GitHub 中文资料榜 - Java
 
@@ -16,7 +18,7 @@ GitHub stars 最高的 Java 项目
 
 ### 面试准备系列
 
-Hollis 的 Java 八股文（需要购买，抖音搜<font title=red>"程序员Hollis"</font>，购入体验：物超所值，强烈推荐！！！）
+Hollis 的 Java 八股文（需要购买，抖音搜<font title=red>"程序员Hollis"</font>，购入体验：持续更新的，物超所值，强烈推荐！！！）
 
 - https://www.yuque.com/hollis666/ca2plb
 
@@ -41,9 +43,14 @@ Java 学习 + 面试指南
 
 ### 实战能力提升
 
+**新手求快就花钱，只推荐一个网站，最佳选择没有之一**
+
+- [imooc](#imooc)
+
 **设计模式**
 
 - https://github.com/fuzhengwei/itstack-demo-design
+- https://github.com/CyC2018/CS-Notes/blob/master/notes/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F%20-%20%E7%9B%AE%E5%BD%95.md
 
 **完整的开源电商系统**
 
@@ -56,6 +63,18 @@ Java 学习 + 面试指南
 **Spring 系列**
 
 - https://github.com/wuyouzhuguli/SpringAll
+
+> 
+>
+> Tips
+>
+> 
+>
+> 实战提升，就是去 GitHub 找开源项目学习，或者工作中慢慢爬，没有捷径，花钱也只是前期会快点（多接触优秀的代码、编程习惯、设计，少走弯路）。
+>
+> 后期主要靠自己了，花钱已经不能提速了。
+>
+> 
 
 ### 算法系列
 
@@ -86,14 +105,40 @@ Java 学习 + 面试指南
 
 ### 免费学习网站
 
+- [学堂在线 - 清华、北大等高校计算机课程](https://www.xuetangx.com/)
+- [中国大学MOOC - 各大高校计算机课程](https://www.icourse163.org/channel/3002.htm)
+- [网易云课堂 - 大学计算机课程（部分关闭了，但b站找得到）](https://study.163.com/curricula/cs.htm)
+- [阿里云培训中心](https://edu.aliyun.com/explore/)
+- [牛客网（求职面试必备、刷题、AI模拟面试，还有 app 移动端）](https://www.nowcoder.com/)
 
-
-### 贵，但仍然强烈推荐的学习网站
+### <span id="imooc">贵，但仍然强烈推荐的学习网站（我自己一直在用）</span>
 
 [慕课网-程序员的梦工厂](https://www.imooc.com/)
 
-- https://www.imooc.com/wiki/
-- https://www.imooc.com/read
+- [免费课（入门还是可以的）](https://www.imooc.com/course/list)
+
+- [慕课教程（这都是免费的）](https://www.imooc.com/wiki/)
+- [慕课专栏（百元内精讲课）](https://www.imooc.com/read)
+- [学习路线 - 系统化学习（这个真的很赞！！！）](https://coding.imooc.com/learningpath/list)
+- [实战课 - 实用性很强，可以直接拿到工作中用的](https://coding.imooc.com/)
+- [大实战课 - 可以作为简历亮点，建议直接部署到服务器，给面试官展示，效果炸裂！！！](https://coding.imooc.com/?tx=tiny)
+- [精品体系课（很贵，但真的很不错！！！）](https://class.imooc.com/)
+
+
+
+**下面是我自己买过的一些课程截图，证明我不是瞎推荐，是实打实地花了钱觉得好的。**
+
+![imooc消费记录](./images/课程推荐/imooc消费记录.png)
+
+**并不是无脑推荐，也买过其他网站的课程，对比过，还是推荐 imooc 的课，其他网站也有优质的课，但是整体质量没法比。**
+
+![拉勾Java高薪训练营课程截图](./images/课程推荐/拉勾Java高薪训练营课程截图.png)
+
+![极客时间订单记录](./images/课程推荐/极客时间订单记录.png)
+
+![网易云课堂-互联网项目管理](./images/课程推荐/网易云课堂-互联网项目管理.png)
+
+![51CTO软考架构师课程](./images/课程推荐/51CTO软考架构师课程.png)
 
 ## Java 基础
 
@@ -169,7 +214,7 @@ Java 学习 + 面试指南
 
 [系统解析JDK源码](https://coding.imooc.com/class/chapter/621.html)
 
-- [学习笔记]()
+- [学习笔记](https://pan.baidu.com/s/1TQxTGs1LGUlBLkOM3mpL8A)
 
 ## Java 并发
 
@@ -198,9 +243,9 @@ Java 学习 + 面试指南
 超级推荐的收费课，个人目前为止学得最舒服的 mooc，我是已经学完了，还特意去买正版课，主打一个支持。
 
 - [线程八大核心+Java并发原理及企业级并发解决方案](https://coding.imooc.com/class/362.html)
-  - [学习笔记]()
+  - [学习笔记](https://pan.baidu.com/s/12tAOJ-ST8xdFZ4-ohOV9xA)
 - [深度解密Java并发工具，精通JUC，成为并发多面手](https://coding.imooc.com/class/409.html)
-  - [学习笔记]()
+  - [学习笔记](https://pan.baidu.com/s/1TeRX1a3KCEYErUm30Nt4cQ)
 
 ## Java 虚拟机
 
@@ -221,7 +266,7 @@ Java 学习 + 面试指南
 
 [构建JVM知识体系 解决Java工程师必会的工作/面试难点](https://coding.imooc.com/class/429.html)
 
-- [学习笔记]()
+- [学习笔记](https://pan.baidu.com/s/1SpjT_DzIIoAeZXW5vQ--nQ)
 
 [JVM七大核心系统精讲 从基础理论到高级应用](https://coding.imooc.com/class/681.html)
 
@@ -233,11 +278,11 @@ Java 学习 + 面试指南
 
 [Java性能调优 6步实现项目性能升级（含 JVM 调优内容）](https://coding.imooc.com/class/442.html)
 
-- [学习笔记]()
+- [学习笔记](https://pan.baidu.com/s/1AHoYgGSRz40snVdGp7Bshw)
 
 [Java生产环境下性能监控与调优详解（含 JVM 调优内容）](https://coding.imooc.com/class/241.html)
 
-- [学习笔记]()
+- [学习笔记](https://pan.baidu.com/s/1yOoCtN4BH60yW_eWn1vDEw)
 
 ## 设计模式
 
@@ -245,7 +290,17 @@ Java 学习 + 面试指南
 
 <blockquote alt="info"><p>学习方式：书 + 视频 + 笔记</p></blockquote>
 
+#### 电子书 pdf
 
+[《大话设计模式》](https://pan.baidu.com/s/1rJvQ457N344Uz9Azn0VOiA?pwd=2n3t)
+
+[《设计模式就该这样学》](https://pan.baidu.com/s/1zgtHWZ8YPuSgaM9Hl6fhvg?pwd=z7fs)
+
+#### 视频资源
+
+[Java设计模式精讲 Debug方式+内存分析]([https://coding.imooc.com/class/270.html)
+
+- [学习笔记](https://pan.baidu.com/s/1nvXZL4Fzg6oRR7WUVLvFvw)
 
 ## 开源框架
 
@@ -253,7 +308,17 @@ Java 学习 + 面试指南
 
 <blockquote alt="info"><p>学习方式：书 + 源码 + 笔记 + UML 图 + 视频</p></blockquote>
 
+#### 电子书 pdf
 
+英语好的，建议直接看官方文档，书里的内容主要来源也是官方文档。事实上有一定阅读能力，配合翻译工具就可以搞定了。
+
+- [Java常用开源框架电子书](https://pan.baidu.com/s/1Ffe2ukPAoVNhYIr7ndGBSA?pwd=7tm7)
+
+#### 视频资源
+
+太多了，自己去“慕课网”、“极客时间”搜，有很多不错的课程。
+
+[网盘资源](https://pan.baidu.com/s/1bSkP-uI-vA3B7v-Ncs3Zvg)
 
 ## 数据库
 
@@ -261,15 +326,65 @@ Java 学习 + 面试指南
 
 <blockquote alt="info"><p>学习方式：书 + 视频 + 笔记</p></blockquote>
 
+#### 电子书 pdf
 
+[网盘资源](https://pan.baidu.com/s/1wGeI7CUwnKYNjj-uQ6-fZA?pwd=0f4r)
+
+#### 视频资源
+
+[MySQL数据库直通车：0基础入门到设计与实现](https://coding.imooc.com/learningpath/route?pathId=6)
+
+[MySQL 实战课](https://coding.imooc.com/?c=mysql)
+
+**推荐课程**
+
+[MySQL面试指南-慕课网实战](https://coding.imooc.com/class/296.html)
+
+- [学习笔记](https://pan.baidu.com/s/1FrPie09y-dKCGr1u7-ToKg)
+
+[程序猿必知必会-MySQL 8.0详解与实战](https://coding.imooc.com/class/332.html)
+
+- [学习笔记](https://pan.baidu.com/s/1sXxX8BYU6drf9Hhox2PEtg)
+
+[阿里新零售数据库设计与实战](https://coding.imooc.com/class/353.html)
+
+- [学习笔记](https://pan.baidu.com/s/1pEg3QUwnrp-KWib_x6H7RQ)
+
+[MySQL性能管理及架构设计](https://coding.imooc.com/class/49.html)
+
+- [学习笔记](https://pan.baidu.com/s/1mfPrVnVdicFgWZvg10YeOg)
+
+[高并发高性能高可用MySQL实战](https://coding.imooc.com/class/515.html)
+
+- [学习笔记](https://pan.baidu.com/s/1EKoZediNxv2PDfJ2ZIT0qw)
+
+[6大数据库，挖掘7种业务场景的存储更优解](https://coding.imooc.com/class/615.html)
+
+- [学习笔记](https://pan.baidu.com/s/10j8mgEXBoO8Ti5xXtys-Ug)
+
+[技术大牛成长课,从0到1带你手写一个数据库系统](https://coding.imooc.com/class/711.html)
+
+- [学习笔记]()
 
 ## 分布式系统
 
 [面试题-分布式系统](./08_distributed-system/面试题-分布式系统.md)
 
-<blockquote alt="info"><p>学习方式：书 + 笔记 + 实战视频</p></blockquote>
+<blockquote alt="info"><p>学习方式：实战 + 笔记</p></blockquote>
 
+#### 视频资源
 
+[Java主流分布式解决方案多场景设计与实战](https://coding.imooc.com/class/686.html)
+
+- [学习笔记]()
+
+[Java分布式架构_分布式服务架构实例](https://coding.imooc.com/class/539.html)
+
+- [学习笔记]()
+
+[体系课：Java架构师-技术专家](https://class.imooc.com/sale/javaarchitect)
+
+- [学习笔记](https://pan.baidu.com/s/1hTRCMEM894KAGpQM08s5lQ)
 
 ## 微服务
 
@@ -283,7 +398,51 @@ Java 学习 + 面试指南
 
 #### 电子书 pdf
 
+[网盘资源](https://pan.baidu.com/s/1rFSCFoUXP3D6b6GrelNJuA?pwd=7zaj)
+
 #### 视频资源
+
+[SpringCloud+Alibaba 从入门到进阶 学习路线](https://coding.imooc.com/learningpath/route?pathId=7)
+
+[Springcloud实战课](https://coding.imooc.com/?c=springcloud)
+
+**推荐课程**
+
+[深度解锁SpringCloud主流组件_一战解决微服务诸多难题](https://coding.imooc.com/class/396.html)
+
+- [学习笔记]()
+
+[Spring Cloud分布式微服务实战_养成应对复杂业务的综合技术能力](https://coding.imooc.com/class/456.html)
+
+- [学习笔记]()
+
+[Spring Cloud Alibaba微服务从入门到进阶](https://coding.imooc.com/class/358.html)
+
+- [学习笔记]()
+
+[Spring Cloud / Alibaba 微服务架构实战](https://coding.imooc.com/class/522.html)
+
+- [学习笔记]()
+
+[SpringCloudAlibaba高并发仿斗鱼直播平台实战](https://coding.imooc.com/class/670.html)
+
+- [学习笔记]()
+
+[Springboot3+微服务实战12306高性能售票系统](https://coding.imooc.com/class/641.html)
+
+- [学习笔记]()
+
+[Nacos核心原理&微服务实战](https://coding.imooc.com/class/611.html)
+
+- [学习笔记]()
+
+[Spring Cloud Alibaba 大型互联网领域多场景最佳实践](https://coding.imooc.com/class/508.html)
+
+- [学习笔记]()
+
+[Spring Cloud 进阶 Alibaba 微服务体系自媒体实战](https://coding.imooc.com/class/chapter/456.html)
+
+- [学习笔记]()
 
 ## Redis
 
@@ -291,7 +450,23 @@ Java 学习 + 面试指南
 
 <blockquote alt="info"><p>学习方式：书 + 视频 + 实战</p></blockquote>
 
+#### 电子书 pdf
 
+[网盘资源](https://pan.baidu.com/s/1GvLPyzP1K0xMYZR7un0EmQ?pwd=wyld)
+
+#### 视频资源
+
+[Java主流分布式解决方案多场景设计与实战](https://coding.imooc.com/class/686.html)
+
+- [学习笔记]()
+
+[高性能多级网关与多级缓存架构落地实战](https://coding.imooc.com/class/694.html)
+
+- [学习笔记]()
+
+[Redis最新版全面精讲_一站式Redis解决方案](https://coding.imooc.com/class/467.html)
+
+- [学习笔记]()
 
 ## 分布式消息队列
 
@@ -299,7 +474,27 @@ Java 学习 + 面试指南
 
 <blockquote alt="info"><p>学习方式：书 + 视频 + 实战</p></blockquote> 
 
+#### 电子书 pdf
 
+[网盘资源](https://pan.baidu.com/s/1oBZeg5BeAan0IKRU6r4KEw?pwd=78nc)
+
+#### 视频资源
+
+[Kafka多维度系统精讲，从入门到熟练掌握](https://coding.imooc.com/class/434.html)
+
+- [学习笔记]()
+
+[RabbitMQ理论+实战精讲_全面提升实际应用能力](https://coding.imooc.com/class/461.html)
+
+- [学习笔记]()
+
+[RocketMQ核心技术精讲与高并发抗压实战](https://coding.imooc.com/class/292.html)
+
+- [学习笔记]()
+
+[体系课：Java架构师-技术专家](https://class.imooc.com/sale/javaarchitect)
+
+- [学习笔记](https://pan.baidu.com/s/1hTRCMEM894KAGpQM08s5lQ)
 
 ## 分布式搜索引擎
 
@@ -307,7 +502,31 @@ Java 学习 + 面试指南
 
 <blockquote alt="info"><p>学习方式：书 + 视频 + 实战</p></blockquote> 
 
+#### 电子书 pdf
 
+[网盘资源](https://pan.baidu.com/s/1mDygNBO6FzTC_hZ-LfPADw?pwd=nse5)
+
+#### 视频资源
+
+[ElasticSearch+Spark 构建高匹配度搜索服务_千人千面推荐系统](https://coding.imooc.com/class/391.html)
+
+- [学习笔记]()
+
+[Elastic Stack 从入门到实践](https://coding.imooc.com/class/181.html)
+
+- [学习笔记]()
+
+[Spark + Elasticsearch 构建电商用户标签系统实现精准营销](https://coding.imooc.com/class/410.html)
+
+- [学习笔记]()
+
+[Go+ES8企业级搜索微服务](https://coding.imooc.com/class/579.html)
+
+- [学习笔记]()
+
+[国际证书-Elasticsearch 认证工程师 一站式通关课](https://coding.imooc.com/class/697.html)
+
+- [学习笔记]()
 
 ## 容器
 
@@ -315,7 +534,31 @@ Java 学习 + 面试指南
 
 <blockquote alt="info"><p>学习方式：书 + 视频 + 实战</p></blockquote> 
 
+#### 电子书 pdf
 
+[网盘资源](https://pan.baidu.com/s/1yUjKsWax0LRwewqDQm8C-A?pwd=jajo)
+
+#### 视频资源
+
+[Docker+ Kubernetes 微服务容器化实践](https://coding.imooc.com/class/198.html)
+
+- [学习笔记]()
+
+[基于SpringCloud+Kubernetes _微服务的容器化持续交付实战](https://coding.imooc.com/class/439.html)
+
+- [学习笔记]()
+
+[Kubernetes 入门到进阶实战](https://coding.imooc.com/class/464.html)
+
+- [学习笔记]()
+
+[Docker系统性入门+实践](https://coding.imooc.com/class/511.html)
+
+- [学习笔记]()
+
+[Kubernetes系统精讲 Go语言实战K8S集群可视化](https://coding.imooc.com/class/642.html)
+
+- [学习笔记]()
 
 ## 架构设计
 
@@ -323,7 +566,25 @@ Java 学习 + 面试指南
 
 <blockquote alt="info"><p>学习方式：书 + 视频 + 实战</p></blockquote> 
 
+#### 电子书 pdf
 
+[网盘资源](https://pan.baidu.com/s/1GtBz8NQNjGlECKN7P-TeyQ?pwd=symp)
+
+#### 视频资源
+
+[体系课：Java架构师-技术专家](https://class.imooc.com/sale/javaarchitect)
+
+- [学习笔记](https://pan.baidu.com/s/1hTRCMEM894KAGpQM08s5lQ)
+
+[Java 亿级项目架构设计与落地应用](https://class.imooc.com/sale/project)
+
+- [学习笔记]()
+
+[Java架构师-十项能力修炼](https://class.imooc.com/sale/javaalmighty)
+
+- [学习笔记]()
+
+#### GitHub
 
 GitHub stars 228k+ 系统设计入门
 
@@ -351,7 +612,23 @@ GitHub stars 228k+ 系统设计入门
 
 <blockquote alt="info"><p>学习方式：书 + 视频</p></blockquote> 
 
+#### 电子书 pdf
 
+[网盘资源](https://pan.baidu.com/s/1P0h1_uj1N-T0CoRIXSCqCg?pwd=citn)
+
+#### 视频资源
+
+[掌握Shell脚本编程 360架构师带你进阶Linux高手](https://coding.imooc.com/class/314.html)
+
+- [学习笔记]()
+
+[Linux核心技能与应用](https://coding.imooc.com/class/chapter/386.html)
+
+- [学习笔记]()
+
+[Linux系统 从入门到进阶-2023全新版](https://coding.imooc.com/class/703.html)
+
+- [学习笔记]()
 
 ## 网络
 
@@ -359,7 +636,19 @@ GitHub stars 228k+ 系统设计入门
 
 <blockquote alt="info"><p>学习方式：书 + 视频</p></blockquote> 
 
+#### 电子书 pdf
 
+
+
+#### 视频资源
+
+[计算机基础课程](https://class.imooc.com/sale/computer)
+
+- [学习笔记]()
+
+[7天快速学习计算机基础必考八股文](https://coding.imooc.com/learn/list/540.html)
+
+- [学习笔记]()
 
 ## 操作系统
 
@@ -367,7 +656,19 @@ GitHub stars 228k+ 系统设计入门
 
 <blockquote alt="info"><p>学习方式：书 + 视频</p></blockquote> 
 
+#### 电子书 pdf
 
+
+
+#### 视频资源
+
+[操作系统 - 清华大学 - 学堂在线 (xuetangx.com)](https://www.xuetangx.com/course/THU08091000267/12424484?channel=i.area.course_list_all)
+
+- [学习笔记]()
+
+[计算机基础课程 - 慕课网 (imooc.com)](https://class.imooc.com/sale/computer)
+
+- [学习笔记]()
 
 ## 数据结构与算法
 
@@ -392,7 +693,29 @@ GitHub stars 228k+ 系统设计入门
 
 #### 视频资源
 
+[数据结构(上) - 清华大学 - 学堂在线 (xuetangx.com)](https://www.xuetangx.com/course/THU08091000384/16906679?channel=i.area.course_list_all)
 
+- [学习笔记]()
+
+[数据结构（下） - 清华大学 - 学堂在线 (xuetangx.com)](https://www.xuetangx.com/course/THU08091002048/16906478?channel=i.area.course_list_all)
+
+- [学习笔记]()
+
+[算法课程推荐 - 慕课网 (imooc.com)](https://class.imooc.com/sale/datastructure)
+
+- [学习笔记]()
+
+[算法与数据结构高级进阶课程 - 慕课网 (imooc.com)](https://coding.imooc.com/class/589.html)
+
+- [学习笔记]()
+
+[系统入门深度学习，直击算法工程师 - 慕课网 (imooc.com)](https://coding.imooc.com/class/547.html)
+
+- [学习笔记]()
+
+[计算机基础课程 - 慕课网 (imooc.com)](https://class.imooc.com/sale/computer)
+
+- [学习笔记]()
 
 ## 其他技术
 
