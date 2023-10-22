@@ -290,6 +290,8 @@ Java 学习 + 面试指南
 
 <blockquote alt="info"><p>学习方式：书 + 视频 + 笔记</p></blockquote>
 
+[个人学习笔记](https://gitee.com/pingWurth/study-notes/blob/master/design_mode/designpattern/README.md)
+
 #### 电子书 pdf
 
 [《大话设计模式》](https://pan.baidu.com/s/1rJvQ457N344Uz9Azn0VOiA?pwd=2n3t)
@@ -308,6 +310,8 @@ Java 学习 + 面试指南
 
 <blockquote alt="info"><p>学习方式：书 + 源码 + 笔记 + UML 图 + 视频</p></blockquote>
 
+[个人学习笔记](https://gitee.com/pingWurth/study-notes#spring-1)
+
 #### 电子书 pdf
 
 英语好的，建议直接看官方文档，书里的内容主要来源也是官方文档。事实上有一定阅读能力，配合翻译工具就可以搞定了。
@@ -325,6 +329,8 @@ Java 学习 + 面试指南
 [面试题-数据库](./07_database/面试题-数据库.md)
 
 <blockquote alt="info"><p>学习方式：书 + 视频 + 笔记</p></blockquote>
+
+[个人学习笔记](https://gitee.com/pingWurth/study-notes/blob/master/mysql/MySQL%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0.md)
 
 #### 电子书 pdf
 
@@ -450,6 +456,8 @@ Java 学习 + 面试指南
 
 <blockquote alt="info"><p>学习方式：书 + 视频 + 实战</p></blockquote>
 
+[个人学习笔记](https://gitee.com/pingWurth/study-notes#/pingWurth/study-notes/blob/master/redis/Redis%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0.md)
+
 #### 电子书 pdf
 
 [网盘资源](https://pan.baidu.com/s/1GvLPyzP1K0xMYZR7un0EmQ?pwd=wyld)
@@ -473,6 +481,8 @@ Java 学习 + 面试指南
 [面试题-分布式消息队列](./11_distributed-message-queue/面试题-分布式消息队列.md)
 
 <blockquote alt="info"><p>学习方式：书 + 视频 + 实战</p></blockquote> 
+
+[个人学习笔记](https://gitee.com/pingWurth/study-notes/blob/master/kafka/Kafka%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0.md)
 
 #### 电子书 pdf
 
@@ -501,6 +511,8 @@ Java 学习 + 面试指南
 [面试题-分布式搜索引擎](./12_search-engine/面试题-分布式搜索引擎.md)
 
 <blockquote alt="info"><p>学习方式：书 + 视频 + 实战</p></blockquote> 
+
+[个人学习笔记](https://gitee.com/pingWurth/study-notes/blob/master/elasticsearch/Elasticsearch%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0.md)
 
 #### 电子书 pdf
 
@@ -533,6 +545,8 @@ Java 学习 + 面试指南
 [面试题-容器](./13_container/面试题-容器.md)
 
 <blockquote alt="info"><p>学习方式：书 + 视频 + 实战</p></blockquote> 
+
+[个人学习笔记](https://gitee.com/pingWurth/study-notes/blob/master/docker/Docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0.md)
 
 #### 电子书 pdf
 
