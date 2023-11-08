@@ -135,39 +135,6 @@ wait 会让线程进入等待（WAITING）状态直到被唤醒，需要搭配�
 
 notify 只会唤醒一个线程，notifyAll 会唤醒 _waitSet 中所有线程。
 
-#### 什么是 ThreadLocal，如何实现的？
-
-ThreadLocal 提供线程局部变量，当你希望将状态与线程相关联时可以使用它。
-
-ThreadLocal 有 4 个方法：
-
-- **whthIntial(Supplier)**
-  - 静态方法，返回一个 `SuppliedThreadLocal`，接受一个  `Supplier` 用于设置初始值。
-- **get**
-  - 返回此线程局部变量的当前线程副本中的值。如果没有值，就返回 `setInitialValue()` 的值。
-- **set**
-  - 将此线程局部变量的当前线程副本设置为指定值。
-- **remove**
-  - 移除这个线程局部变量的当前线程值，如果随后又调了 get 方法，就会通过 initialValue 重新初始化。
-
-
-
-**下面通过 set 方法源码分析，了解 ThreadLocal 是如何实现的：**
-
-![ThreadLocal.set源码SequenceDiagram](./images/ThreadLocal.set源码SequenceDiagram.svg)
-
-**通过 set 方法分析，确定 ThreadLocal 的结构如下：**
-
-![ThreadLocal的弱引用](./images/ThreadLocal的弱引用.png)
-
-#### ThreadLocal 内存泄漏是怎么回事？
-
-#### ThreadLocalMap 的结构了解吗？
-
-#### ThreadLocalMap 怎么解决 hash 冲突的？
-
-#### ThreadLocalMap 扩容机制了解吗？
-
 #### 父子线程怎么共享数据？
 
 #### 一个线程两次调用 start() 会出现什么情况？为什么？
@@ -220,9 +187,44 @@ sleep 期间，线程处于 TIMED_WAITING 状态，线程不会被调度。
 
 #### CompletableFuture 的底层是如何实现的？
 
-#### 有了 InheritableThreadLocal 为啥还需要 TransmittableThreadLocal？
-
 #### JDK21 中的虚拟线程是怎么回事？
+
+## ThreadLocal
+
+#### 什么是 ThreadLocal，如何实现的？
+
+ThreadLocal 提供线程局部变量，当你希望将状态与线程相关联时可以使用它。
+
+ThreadLocal 有 4 个方法：
+
+- **whthIntial(Supplier)**
+  - 静态方法，返回一个 `SuppliedThreadLocal`，接受一个  `Supplier` 用于设置初始值。
+- **get**
+  - 返回此线程局部变量的当前线程副本中的值。如果没有值，就返回 `setInitialValue()` 的值。
+- **set**
+  - 将此线程局部变量的当前线程副本设置为指定值。
+- **remove**
+  - 移除这个线程局部变量的当前线程值，如果随后又调了 get 方法，就会通过 initialValue 重新初始化。
+
+
+
+**下面通过 set 方法源码分析，了解 ThreadLocal 是如何实现的：**
+
+![ThreadLocal.set源码SequenceDiagram](./images/ThreadLocal.set源码SequenceDiagram.svg)
+
+**通过 set 方法分析，确定 ThreadLocal 的结构如下：**
+
+![ThreadLocal的弱引用](./images/ThreadLocal的弱引用.png)
+
+#### ThreadLocal 内存泄漏是怎么回事？
+
+#### ThreadLocalMap 的结构了解吗？
+
+#### ThreadLocalMap 怎么解决 hash 冲突的？
+
+#### ThreadLocalMap 扩容机制了解吗？
+
+#### 有了 InheritableThreadLocal 为啥还需要 TransmittableThreadLocal？
 
 ## 锁
 
