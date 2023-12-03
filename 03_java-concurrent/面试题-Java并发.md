@@ -135,25 +135,49 @@ wait 会让线程进入等待（WAITING）状态直到被唤醒，需要搭配�
 
 notify 只会唤醒一个线程，notifyAll 会唤醒 _waitSet 中所有线程。
 
-#### 父子线程怎么共享数据？
-
 #### 一个线程两次调用 start() 会出现什么情况？为什么？
+
+start 的时候会先检查线程状态，只有 new 状态的线程才能继续，否则会抛出 IlleagalThreadStateException。
+
+> Tips
+>
+> start  方法是被 synchronized 修饰的，可以保证线程安全。
+>
+> 由 JVM 创建的 main 方法线程和 system 组线程，并不会通过 start 来启动。
 
 #### 如何正确停止一个线程？
 
+用 interrupt 方法来请求线程停止，线程通过 isInterrupted 方法获取中断标识，然后抛异常，即可停止一个线程。
+
 #### 如何处理不可中断的阻塞？
+
+> 例如抢锁时 ReetrantLock.lock() 或者 Socket I/O 时无法响应中断。
+
+对于不能响应 InterruptedException 的阻塞，并没有通用的解法。得具体情况具体分析，比如 `ReentrantLock.lockInterruptibly()`，再比如关闭套接字使线程立即返回。
 
 #### 如何用 wait() 实现两个线程交替打印 0~100 的奇偶数？
 
+一个线程打印奇数，一个线程打印偶数，每次打印后就唤醒（notify）另外一个线程，自己进入休眠状态，等待另一个线程打印后唤醒自己，然后循环重复。
+
 #### 为什么 wait() 必须在同步代码块中使用？
+
+如果不在同步代码块中，那就无法准确控制 `wait()` 和 `notify()` 的执行顺序了，如果发生了 `notify()` 先执行，再执行 `wait()` 的情况，那么就会无限等待。
 
 #### wait() 方法是属于 Object 对象的，那调用 Thread#wait() 会怎么样？
 
+与 Object 的 wait 无异，但是 Thread 退出（`exit()`）的时候会自动 `notify()`，这样我们自己设计的唤醒流程就受到了干扰，所以非常不推荐这么干。
+
 #### notify 和 notifyAll 如何选择？
+
+使用 notifyAll，除非一次通知需要唤醒的线程只有一个，且是同质等待线程（同一保护条件，且 wait 后的处理逻辑一致）。
 
 #### notifyAll 后所有线程都会再次抢夺锁，如果抢夺失败会怎样？
 
+继续等待，和 synchronized 的 monitor 一样。
+
 #### 用 suspend 和 resume 来阻塞线程可以吗？为什么？
+
+不推荐使用，效果类似于 wait 和 notify，但不释放锁，容易引起死锁。
 
 #### join 期间，线程处于哪种状态？
 
@@ -171,23 +195,270 @@ sleep 期间，线程处于 TIMED_WAITING 状态，线程不会被调度。
 
 #### 你知道哪几类线程安全问题？
 
+- 运行结果错误（多线程共享的数据被并发修改）
+- 对象发布和初始化的时候的安全问题，比如：构造函数中运行线程
+- 死锁等活跃性问题
+
 #### 哪些场景需要注意线程安全问题？
+
+1. 访问共享的变量活资源会有并发风险
+2. 依赖时序的操作
+3. 不同的数据之间存在捆绑关系的时候
 
 #### 为什么多线程会带来性能问题？
 
-#### 父子线程之间怎么共享数据？
+由于线程需要协作，存在调度的开销（当线程数超过 cpu 核心数时）。
 
-#### 如何对多线程进行编排？
+除此之外，还有缓存开销。线程上下文切换还有导致 cpu 缓存失效。
+
+#### 如何实现主线程捕获子线程异常?
+
+- Callable 和 Future
+
+```java
+import java.util.concurrent.*;
+
+public class Main {
+    public static void main(String[] args) {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+
+        Future<Integer> future = executor.submit(() -> {
+            // 子线程抛出异常
+            throw new RuntimeException("子线程异常");
+        });
+
+        try {
+            Integer result = future.get();
+            System.out.println("子线程结果: " + result);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            System.out.println("捕获到子线程异常"));
+        }
+
+        executor.shutdown();
+    }
+}
+```
+
+- UncaughtExceptionHandler
+
+```java
+public class DemoUncaughtExceptionHandler implements Thread.UncaughtExceptionHandler {
+    @Override
+    public void uncaughtException(Thread t, Throwable e) {
+        System.out.println("线程 " + t.getName() + " 抛出未捕获异常：" + e.getMessage());
+        // 在这里可以执行自定义的异常处理逻辑
+    }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        Thread thread = new Thread(() -> {
+            throw new RuntimeException("这是一个未捕获异常");
+        });
+        
+        // 设置自定义的未捕获异常处理器
+        thread.setUncaughtExceptionHandler(new DemoUncaughtExceptionHandler());
+        
+        thread.start();
+    }
+}
+```
 
 #### 三个线程分别顺序打印 0-100
 
+**用 Thread#yield 实现**
+
+```java
+private static volatile int count = 0;
+private static final int MAX = 100;
+static class OtherWorker implements Runnable {
+
+        private final int index;
+
+        public OtherWorker(int index) {
+            this.index = index;
+        }
+
+        @Override
+        public void run() {
+            while (count < MAX) {
+                while (count % 3 != index) {
+                    Thread.yield();
+                }
+                if (count > MAX) {
+                    return;
+                }
+                System.out.println("Thread-" + index + " " + count);
+                count++;
+            }
+        }
+}
+```
+
+**用 ReentrantLock 和 Condition#await 和 Condition#singal 实现**
+
+```java
+public class Test {
+    private static final int WORKER_COUNT = 3;
+    private static int countIndex = 0;
+    private static final ReentrantLock LOCK = new ReentrantLock();
+
+    public static void main(String[] args){
+        final List<Condition> conditions = new ArrayList<>();
+        for(int i=0; i< WORKER_COUNT; i++){
+            // 为每一个线程分配一个condition
+            Condition condition = LOCK.newCondition();
+            conditions.add(condition);
+            Worker worker = new Worker(i, conditions);
+            worker.start();
+        }
+
+    }
+
+    static class Worker extends Thread{
+
+        int index;
+        List<Condition> conditions;
+
+        public Worker(int index, List<Condition> conditions){
+            super("Thread-"+index);
+            this.index = index;
+            this.conditions = conditions;
+        }
+
+        private void signalNext(){
+            int nextIndex = (index + 1) % conditions.size();
+            conditions.get(nextIndex).signal();
+        }
+
+        @Override
+        public void run(){
+            while(true) {
+                //锁住 保证操作间同时只有一个线程
+                LOCK.lock();
+                try {
+                    // 如果当前线程不满足打印条件，则等待
+                    if (countIndex % 3 != index) {
+                        conditions.get(index).await();
+                    }
+                    if (countIndex > 100) {
+                        // 唤醒下一个线程，保证程序正常退出
+                        signalNext();
+                        // 退出循环 线程运行结束
+                        return;
+                    }
+                    System.out.println((this.getName() + " " + countIndex));
+                    // 计数器+1
+                    countIndex ++;
+                    // 通知下一个干活
+                    signalNext();
+                }catch (Exception e){
+                    e.printStackTrace();
+                }finally {
+                    LOCK.unlock();
+                }
+            }
+        }
+    }
+}
+```
+
+**用 synchronized 和 wait/notifyAll 实现**
+
+```java
+public class SortTest {
+
+    private static final Object LOCK = new Object();
+    private static volatile int count = 0;
+    private static final int MAX = 100;
+
+    public static void main(String[] args) {
+        Thread thread = new Thread(new Seq(0));
+        Thread thread1 = new Thread(new Seq(1));
+        Thread thread2 = new Thread(new Seq(2));
+        thread.start();
+        thread1.start();
+        thread2.start();
+    }
+
+    static class Seq implements Runnable {
+
+        private final int index;
+
+        public Seq(int index) {
+            this.index = index;
+        }
+
+        @Override
+        public void run() {
+            while (count < MAX) {
+                synchronized (LOCK) {
+                    try {
+                        while (count % 3 != index) {
+                            LOCK.wait();
+                        }
+                        if(count <=MAX){
+                            System.out.println("Thread-" + index + ": " + count);
+                        }
+                        count++;
+                        LOCK.notifyAll();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
 #### Future 类有什么用？
+
+Future 是一个接口，代表了一个异步执行的结果。接口中的方法用来检查执行是否完成、等待完成和得到执行的结果。当执行完成后，只能通过 get() 方法得到结果，get 方法会阻塞直到结果准备好了。如果想取消，那么调用 cancel() 方法。
+
+FutureTask 是 Future 接口的一个实现，它实现了一个可以提交给 Executor 执行的任务，并且可以用来检查任务的执行状态和获取任务的执行结果。
 
 #### Callable 和 Future 有什么关系？
 
+Callable 接口定义了一个具有返回值的任务，它的 `call()` 方法可以被调用并返回一个结果。Callable 接口通常与 Executor 一起使用，以便将任务提交给线程池进行执行。
+
+`submit` 方法返回一个 Future，代表一个异步计算的结果，它提供一些方法来检查任务是否完成、等待任务完成并获得结果。
+
+```java
+public class CallableExample implements Callable<String> {
+    @Override
+    public String call() throws Exception {
+        // 执行一些耗时的操作
+        Thread.sleep(2000);
+        return "任务执行完成";
+    }
+
+    public static void main(String[] args) throws Exception {
+        CallableExample callable = new CallableExample();
+        ExecutorService executor = Executors.newFixedThreadPool(1);
+        Future<String> future = executor.submit(callable);
+
+        // 获取任务的执行结果
+        String result = future.get();
+        System.out.println(result);
+
+        executor.shutdown();
+    }
+}
+```
+
+#### 如何对多线程进行编排？
+
+在 Java 8 中, 新增加了一个新的类: `CompletableFuture`，它提供了非常强大的 Future 的扩展功能，可以帮助我们简化异步编程的复杂性，提供了函数式编程的能力，可以通过回调的方式处理计算结果，并且提供了转换和组合 `CompletableFuture` 的方法。
+
 #### CompletableFuture 的底层是如何实现的？
 
+
+
 #### JDK21 中的虚拟线程是怎么回事？
+
+
 
 ## ThreadLocal
 
@@ -216,15 +487,66 @@ ThreadLocal 有 4 个方法：
 
 ![ThreadLocal的弱引用](./images/ThreadLocal的弱引用.png)
 
+可以看到 ThreadLocal 是通过线程实例的 ThreadLocalMap 的 Entry 数组引用的，Entry 的 referent 是继承的弱引用。
+
+所以，即使 Thread 一直存在，ThreadLocal 也会在下次 GC 的时候被清理，前提是没有其他引用。
+
 #### ThreadLocal 内存泄漏是怎么回事？
+
+如上所述，虽然 ThreadLocal 是通过弱引用引用的，但是 value 是强引用，一般我们都是使用线程池，线程实例没有销毁 value 就一直存在，这就是 ThreadLocal 的内存泄露。
+
+我们一般会在线程任务执行结束后进行 remove 操作，来清理 value。事实上，调用 get 和 set 方法的时候也会检查弱引用是否为 null，然后清理无用的 value。
 
 #### ThreadLocalMap 的结构了解吗？
 
+ThreadLocalMap 位于 ThreadLocal 类，是一个静态内部类。它的结构主要是一个 Entry 数组，Entry 也是 ThreadLocalMap 的静态内部类，继承 WeakReference，通过弱引用指向 ThreadLocal 实例，Entry 的 value 字段存储具体的内容。
+
 #### ThreadLocalMap 怎么解决 hash 冲突的？
+
+开放定址法。
+
+```java
+    private static AtomicInteger nextHashCode = new AtomicInteger();
+
+    /**
+     * 2^32 * (1 - 0.618)
+     */
+    private static final int HASH_INCREMENT = 0x61c88647;
+
+    /**
+     * Returns the next hash code.
+     */
+    private static int nextHashCode() {
+        return nextHashCode.getAndAdd(HASH_INCREMENT);
+    }
+```
+
+`hashCode & (数组长度 - 1)` 确定存到哪个位置，如果该位置已经有值，就找下一个位置，知道找到空位。
 
 #### ThreadLocalMap 扩容机制了解吗？
 
+在 set 结束后，会先进行启发式清理，如果没有清理掉任何数据，就判断 size 是否大于等于容量的 `2/3`，如果是，就 `rehash()`。
+
+rehash 会先清理过期的 Entry，然后判断 size 是否大于等于阈值的 `3/4`，如果是，就 resize，按两倍扩容，把旧数组中的 Entry 重新散列到新数组。
+
+#### 父子线程怎么共享数据？
+
+使用 InheritableThreadLocal，构造 Thread 的时候调用 init 方法，会将父线程的 inheritableThreadLocal 传递给子线程。
+
+```java
+this.inheritableThreadLocals = ThreadLocal.createInheritedMap(parent.inheritableThreadLocals);
+```
+
 #### 有了 InheritableThreadLocal 为啥还需要 TransmittableThreadLocal？
+
+InheritableThreadLocal 是用于主子线程之间参数传递的，但是，这种方式有一个问题，那就是必须要是在主线程中手动创建的子线程才可以，但是现在都是使用线程池，所以 InheritableThreadLocal 就不好使了。
+
+TransmittableThreadLocal 是阿里开源的一个方案，这个类继承并加强 InheritableThreadLocal 类。用来实现线程之间的参数传递，一经常被用在以下场景中：
+
+- 分布式跟踪系统 或 全链路压测（即链路打标）
+- 日志收集记录系统上下文
+- Session 级 Cache
+- 应用容器或上层框架跨应用代码给下层 SDK 传递信息
 
 ## 锁
 
