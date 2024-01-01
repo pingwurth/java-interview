@@ -979,6 +979,13 @@ TransmittableThreadLocal 是阿里开源的一个方案，这个类继承并加�
 
 #### 线程同步的方式有哪些？
 
+- synchronized
+- ReentrantLock
+- Semaphore
+- CountDownLatch
+- CyclicBarrier
+- Phaser
+
 #### 什么是死锁？如何解决？
 
 #### 什么是 Java 内存模型？
