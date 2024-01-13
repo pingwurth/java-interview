@@ -987,6 +987,8 @@ JMM 作用于工作内存和主存之间数据同步过程。它规定了如何�
 
 **有 8 种操作**：`lock/unlock`、`read - load - use`、`assign - store - write`。
 
+![Java内存模型](./images/Java内存模型.png)
+
 #### 什么是总线嗅探和总线风暴，和 JMM 有什么关系？
 
 在 Java 内存模型中，总线嗅探和总线风暴问题与 CPU 缓存一致性有关。
@@ -1401,163 +1403,308 @@ synchronized 保证了统一时间只有一个线程能够访问，就保证了�
 
 #### 讲讲 volatile 关键字
 
-
+![volatile](./images/volatile.png)
 
 #### volatile 的原理了解吗？
 
-
+![Java内存模型](./images/Java内存模型.png)
 
 #### 有了 synchronized 为什么还需要 volatile?
 
+**synchronized 是一种加锁机制，那么既然是锁，天然就具备以下几个缺点：**
 
+1、有性能损耗：虽然在 JDK 1.6 中对 synchronized 做了很多优化，如适应性自旋、锁消除、锁粗化、轻量级锁和偏向锁等。但是他毕竟还是一种锁。所以，无论是使用同步方法还是同步代码块，在同步操作之前还是要进行加锁，同步操作之后需要进行解锁，这个加锁、解锁的过程是要有性能损耗的。
+
+2、产生阻塞：无论是同步方法还是同步代码块，无论是 ACC_SYNCHRONIZED 还是 monitorenter、monitorexit 都是基于 Monitor 实现的。基于 Monitor 对象，当多个线程同时访问一段同步代码时，首先会进入 Entry Set，当有一个线程获取到对象的锁之后，才能进行 The Owner 区域，其他线程还会继续在 Entry Set 等待。并且当某个线程调用了 wait 方法后，会释放锁并进入 Wait Set 等待。所以，synchronize 实现的锁本质上是一种阻塞锁。
+
+> 除了前面我们提到的 volatile 比s ynchronized 性能好以外，volatile 其实还有一个很好的附加功能，那就是禁止指令重排。因为 volatile 借助了内存屏障来帮助其解决可见性和有序性问题，而内存屏障的使用还为其带来了一个禁止指令重排的附加功能，所以在有些场景中是可以避免发生指令重排的问题的。
 
 #### volatile 能保证原子性吗？为什么？
 
+不能，volatile 不是锁，没有做任何保证原子性的处理。
 
+> synchronized 是能保证被锁住的代码只被一个线程访问，不会被其他线程中断或影响，因此保证了原子性。
 
 #### int a = 1 是原子性操作吗？
 
-
+是。
 
 #### volatile 是如何保证可见性和有序性的？
 
+**可见性**
 
+如果一个变量被 volatile 所修饰的话，在每次数据变化之后，其值都会被强制刷入主存。而其他处理器的缓存由于遵守了缓存一致性协议，也会把这个变量的值从主存加载到自己的缓存中。这就保证了一个 volatile 在并发编程中，其值在多个缓存中是可见的。
+
+**有序性**
+
+volatile 是通过内存屏障来禁止指令重排的，这就保证了代码的程序会严格按照代码的先后顺序执行。这就保证了有序性。被 volatile 修饰的变量的操作，会严格按照代码顺序执行，`load->add->save` 的执行顺序就是：`load、add、save`。
 
 #### 什么是指令重排序？
 
+在执行程序时，为了提高性能，编译器和处理器常常会对指令做重排序。重排序分 3 种类型。
 
+1. **编译器优化的重排序：**编译器在不改变单线程程序语义的前提下，可以重新安排语句的执行顺序。
+2. **指令级并行的重排序：**现代处理器采用了指令级并行技术（Instruction-Level Parallelism，ILP）来将多条指令重叠执行。如果不存在数据依赖性，处理器可以改变语句对应 机器指令的执行顺序。
+3. **内存系统的重排序：**由于处理器使用缓存和读/写缓冲区，这使得加载和存储操作看上去可能是在乱序执行。
 
 #### 指令重排序有限制吗？
 
-
+有两个规则 `happens-before` 和 `as-if-serial` 来约束
 
 #### happens-bofore 是什么？
 
+- 如果一个操作 happens-before 另一个操作，那么第一个操作的执行结果将对第二个操作可见，而且第一个操作的执行顺序排在第二个操作之前。
+- 两个操作之间存在 happens-before 关系，并不意味着Java平台的具体实现必须要按照 happens-before 关系指定的顺序来执行。如果重排序之后的执行结果，与按 happens-before 关系来执行的结果一致，那么这种重排序并不非法。
 
+#### happens-before 规则有哪些？
 
-#### happens-beefore 规则有哪些？
-
-
+![先行发生原则](./images/先行发生原则.png)
 
 #### as-if-serial 是什么？单线程的程序一定是顺序的吗？
 
+as-if-serial 语义的意思是：不管怎么重排序（编译器和处理器为了提高并行度），单线程程序的执行结果不能被改变。编译器、runtime 和处理器都必须遵守 as-if-serial 语义。
 
+为了遵守 as-if-serial 语义，编译器和处理器不会对存在数据依赖关系的操作做重排序，因为这种重排序会改变执行结果。
+
+但是，如果操作之间不存在数据依赖关系，这些操作就可能被编译器和处理器重排序。
+
+> 单线程程序是按程序的“顺序”来执行的。as- if-serial 语义使单线程情况下，我们不需要担心重排序的问题，可见性的问题。
 
 #### 什么是 CAS？存在什么问题？
 
+CAS 是一项乐观锁技术，是 Compare And Swap 的简称，顾名思义就是先比较再替换。CAS 操作包含三个操作数 —— 内存位置（V）、预期原值（A）和新值(B)。在进行并发修改的时候，会先比较 A 和 V 中取出的值是否相等，如果相等，则会把值替换成 B，否则就不做任何操作。
 
+当多个线程尝试使用 CAS 同时更新同一个变量时，只有其中一个线程能更新变量的值，而其它线程都失败，失败的线程并不会被挂起，而是被告知这次竞争中失败，并可以再次尝试。
+
+**存在 ABA 问题**
+
+在 Java 中，可以借助 AtomicStampedReference，它是 Java 并发编程中的一个类，用于解决多线程环境下的“ABA”问题。
+
+AtomicStampedReference 通过同时维护一个引用和一个时间戳，可以解决 ABA 问题。
+
+它允许线程在执行 CAS 操作时，不仅检查引用是否发生了变化，还要检查时间戳是否发生了变化。
+
+这样，即使一个变量的值被修改后又改回原值，由于时间戳的存在，线程仍然可以检测到这中间的变化。
+
+**存在忙等待的问题**
+
+因为 CAS 基本都是要自旋的，这种情况下，如果并发冲突比较大的话，就会导致 CAS 一直在不断地重复执行，就会进入忙等待，会对 CPU 造成较大的执行开销。
 
 #### CAS 一定有自旋吗？
 
+通常情况下，CAS 操作都会采用自旋的方式，当 CAS 失败时，会重新尝试执行 CAS 操作，直到操作成功或达到最大重试次数为止。
 
+因为，CAS 操作一般都是在多线程并发访问时使用，如果直接阻塞线程，会导致性能下降，而采用自旋的方式，可以让 CPU 空转一段时间，等待锁被释放，从而避免线程切换和阻塞的开销。
+
+但是，如果自旋时间过长或者线程数过多，就会占用过多的 CPU 资源，导致系统性能下降，因此在使用 CAS 操作时，需要根据实际情况进行适当的调整。
 
 #### 什么是 Unsafe？
 
+> Unsafe 是 CAS 的核心类。因为 Java 无法直接访问底层操作系统，而是通过本地（native）方法来访问。不过尽管如此，JVM 还是开了一个后门，JDK 中有一个类Unsafe，它提供了硬件级别的原子操作。
 
+Unsafe 是 Java 中一个底层类，包含了很多基础的操作，比如数组操作、对象操作、内存操作、CAS 操作、线程(park)操作、栅栏（Fence）操作，JUC包、一些三方框架都使用 Unsafe 类来保证并发安全。
+
+Unsafe 类在 jdk 源码的多个类中用到，这个类的提供了一些绕开 JVM 的更底层功能，基于它的实现可以提高效率。但是，它是一把双刃剑：正如它的名字所预示的那样，它是 Unsafe 的，它所分配的内存需要手动 free（不被 GC 回收）。Unsafe类，提供了 JNI 某些功能的简单替代：确保高效性的同时，使事情变得更简单。
+
+**Unsafe 类提供了硬件级别的原子操作，主要提供了以下功能：**
+
+1. 通过 Unsafe 类可以分配内存，可以释放内存
+2. 可以定位对象某字段的内存位置，也可以修改对象的字段值，即使它是私有的
+3. 将线程进行挂起与恢复
+4. CAS 操作
 
 #### CAS 在操作系统层面是如何保证原子性的？
 
+CAS 是一种基本的原子操作，用于解决并发问题。在操作系统层面，CAS 操作的原理是基于硬件提供的原子操作指令。在 x86 架构的 CPU 中，CAS 操作通常使用 cmpxchg 指令实现。
 
+为啥 cmpxchg 指令可以保证原子性呢？主要由以下几个方面的保障：
+
+- cmpxchg 指令是一条原子指令。在 CPU 执行 cmpxchg 指令时，处理器会自动锁定总线，防止其他 CPU 访问共享变量，然后执行比较和交换操作，最后释放总线。
+
+- cmpxchg 指令在执行期间，CPU 会自动禁止中断。这样可以确保 CAS 操作的原子性，避免中断或其他干扰对操作的影响。
+
+- cmpxchg 指令是硬件实现的，可以保证其原子性和正确性。CPU 中的硬件电路确保了 cmpxchg 指令的正确执行，以及对共享变量的访问是原子的。
+
+#### CAS 怎么保证可见性的？
+
+因为 cmpxchg 指令是基于 CPU 缓存一致性协议实现的。在多核 CPU 中，所有核心的缓存都是一致的。
+
+当一个 CPU 核心执行 cmpxchg 指令时，其他 CPU 核心的缓存会自动更新，以确保对共享变量的访问是一致的。
 
 #### synchronized 和 ReentrantLock 区别？
 
+ 二者相同点是，都是可重入锁。二者也有很多不同，如：
 
+- synchronized 是 Java 内置特性，而 ReentrantLock 是通过 Java 代码实现的。
+- synchronized 是可以自动获取/释放锁的，但是 ReentrantLock 需要手动获取/释放锁。
+- ReentrantLock 还具有响应中断、超时等待 等特性。
+- ReentrantLock 可以实现公平锁和非公平锁，而 synchronized 只是非公平锁。
+- ReentrantLock 还可以使用 Condition 控制线程的阻塞（会释放锁）和唤醒。
 
 #### 公平锁和非公平锁的区别？
 
+**非公平锁**：多个线程不按照申请锁的顺序去获得锁，而是直接去尝试获取锁，获取不到，再进入队列等待，如果能获取到，就直接获取到锁。
 
+**公平锁**：多个线程按照申请锁的顺序去获得锁，所有线程都在队列里排队，这样就保证了队列中的第一个先得到锁。
+
+> 两种锁分别适合不同的场景中，存在着各自的优缺点，对于公平锁来说，他的优点是所有的线程都能得到资源，不会饿死在队列中。但是他存在着吞吐量会下降很多，队列里面除了第一个线程，其他的线程都会阻塞，cpu唤醒阻塞线程的开销会很大的缺点。
+>
+> 而对于非公平锁来说，他可以减少 CPU 唤醒线程的开销，整体的吞吐效率会高点，CPU 也不必去唤醒所有线程，会减少唤起线程的数量。但是他可能会导致队列中排队的线程一直获取不到锁或者长时间获取不到锁，活活饿死的情况。
 
 #### ReentrantLock 的实现原理
 
+- ReentrantLock 底层原理
 
+> ReentrantLock 中所有的方法都是通过调用 **java.util.concurrent.locks.ReentrantLock.Sync** 实例的方法实现的。
+>
+> 而 Sync 除了少数几个定制化的功能之外，其他方法都是通过继承 AbstractQueuedSynchronizer 获得，下面简称 **AQS**。
+
+- AQS 是什么？
+
+![AQS是什么](./images/AQS是什么.png)
+
+- AQS 的节点（Node）
+
+![AQS的节点Node](./images/AQS的节点Node.png)
+
+- AQS 三要素
+
+![AQS三要素](./images/AQS三要素.png)
+
+- 源码解析 - ReentrantLock.lock
+
+![ReentrantLock.lock](./images/ReentrantLock.lock.png)
+
+- 源码解析 - AbstractQueuedSynchronizer.acquire
+
+![AQS.acquire](./images/AQS.acquire.png)
+
+- 源码解析 - ReentrantLock.unlock
+
+![ReentrantLock.unlock](./images/ReentrantLock.unlock.png)
+
+- ReentrantLock 总结
+
+![ReentrantLock总结](./images/ReentrantLock总结.png)
 
 #### ReentrantLock 怎么实现公平锁的？
 
-
+构造一个 FairSync（本质是一个 AQS），获取锁的时候先判断 state，如果是 0，再判断是否有正在排队的线程，如果有直接排队。
 
 #### StampedLock 是什么？
 
+StampedLock 是 JDK 1.8 引入的性能更好的读写锁，不可重入且不支持条件变量 Conditon。
 
+不同于一般的 Lock 类，StampedLock 并不是直接实现 Lock 或 ReadWriteLock 接口，而是基于 CLH 锁 独立实现的（AQS 也是基于这玩意）。
+
+> CLH 锁其实就是一种是基于逻辑队列非线程饥饿的一种自旋公平锁，由于是 Craig、Landin 和 Hagersten 三位大佬的发明，因此命名为 CLH 锁。
+
+StampedLock 提供了 3 种模式的读写控制模式：读锁、写锁和乐观读。
+
+- 写锁：独占锁，一把锁只能被一个线程获得。当一个线程获取写锁后，其他请求读锁和写锁的线程必须等待。类似于 ReentrantReadWriteLock 的写锁，不过这里的写锁是不可重入的。
+- 读锁 （悲观读）：共享锁，没有线程获取写锁的情况下，多个线程可以同时持有读锁。如果己经有线程持有写锁，则其他线程请求获取该读锁会被阻塞。类似于 ReentrantReadWriteLock 的读锁，不过这里的读锁是不可重入的。
+- **乐观读：**允许多个线程获取乐观读以及读锁。同时允许一个写线程获取写锁。
+
+另外，StampedLock 还支持这三种锁在一定条件下进行相互转换 。
 
 #### StampedLock 性能为什么更好？
 
-
+相比于传统读写锁多出来的乐观读是 StampedLock 比 ReadWriteLock 性能更好的关键原因。StampedLock 的乐观读允许一个写线程获取写锁，所以不会导致所有写线程阻塞，也就是当读多写少的时候，写线程有机会获取写锁，减少了线程饥饿的问题，吞吐量大大提高。
 
 #### StampedLock 适用场景
 
+和 ReentrantReadWriteLock 一样，StampedLock 同样适合读多写少的业务场景，可以作为 ReentrantReadWriteLock 的替代品，性能更好。
 
+不过，需要注意的是 StampedLock 不可重入，不支持条件变量 Conditon，对中断操作支持也不友好（使用不当容易导致 CPU 飙升）。如果你需要用到 ReentrantLock 的一些高级性能，就不太建议使用 StampedLock 了。
+
+另外，StampedLock 性能虽好，但使用起来相对比较麻烦，一旦使用不当，就会出现生产问题。
 
 #### StampedLock 底层原理
 
-
+StampedLock 不是直接实现 Lock或 ReadWriteLock接口，而是基于 CLH 锁 实现的（AQS 也是基于这玩意），CLH 锁是对自旋锁的一种改良，是一种隐式的链表队列。StampedLock 通过 CLH 队列进行线程的管理，通过同步状态值 state 来表示锁的状态和类型。
 
 #### 可中断锁和不可中断锁有什么区别？
 
-
+**可中断锁**：获取锁的过程中可以被中断，不需要一直等到获取锁之后 才能进行其他逻辑处理。ReentrantLock 就属于是可中断锁。
+**不可中断锁**：一旦线程申请了锁，就只能等到拿到锁以后才能进行其他的逻辑处理。 synchronized 就属于是不可中断锁。
 
 #### 共享锁和独占锁有什么区别？
 
-
+**共享锁**：一把锁可以被多个线程同时获得。
+**独占锁**：一把锁只能被一个线程获得。
 
 #### 锁的分类
 
-
+![锁的分类](./images/锁的分类.png)
 
 #### 线程持有读锁还能获取写锁吗？
 
+在线程持有读锁的情况下，该线程不能取得写锁(因为获取写锁的时候，如果发现当前的读锁被占用，就马上获取失败，不管读锁是不是被当前线程持有)。
 
+在线程持有写锁的情况下，该线程可以继续获取读锁（获取读锁时如果发现写锁被占用，只有写锁没有被当前线程占用的情况才会获取失败）。
 
 #### 读锁为什么不能升级为写锁？
 
+写锁可以降级为读锁，但是读锁却不能升级为写锁。这是因为读锁升级为写锁会引起线程的争夺，毕竟写锁属于是独占锁，这样的话，会影响性能。
 
+另外，还可能会有死锁问题发生。举个例子：假设两个线程的读锁都想升级写锁，则需要对方都释放自己锁，而双方都不释放，就会产生死锁。
 
 #### 为什么 JDK 15 要废弃偏向锁？
 
+废弃偏向锁是为了减少复杂性、提高代码可维护性（官方文档）。
 
+在高并发的场景下，频繁的撤销偏向锁和重新偏向不仅不能提升性能，还会导致性能下降，特别是在那些锁竞争较为激烈的应用中。
 
 #### 什么是可重入锁，怎么实现可重入锁？
 
+可重入锁是一种多线程同步机制，允许同一线程多次获取同一个锁而不会导致死锁。这意味着一个线程可以在持有锁的情况下再次请求并获得相同的锁，而不会被自己阻塞。可重入锁有助于避免死锁和提高代码的可维护性，因为它允许在一个线程中嵌套地调用锁定的方法。
 
+在可重入锁的实现上，一般是先要记录下来当前锁是归属于哪个线程的，然后再记录当前锁被重入了多少次。这样在加锁的时候判断是不是当前线程持有的锁，如果是则重入次数 +1，否则重入失败。
 
-#### 什么是乐观锁？什么是悲观锁？
+#### 什么是乐观锁？
 
+**乐观锁**总是假设最好的情况，认为共享资源每次被访问的时候不会出现问题，线程可以不停地执行，无需加锁也无需等待，只是在提交修改的时候去验证对应的资源（也就是数据）是否被其它线程修改了（具体方法可以使用版本号机制或 CAS 算法）。
 
+- 高并发的场景下，乐观锁相比悲观锁来说，不存在锁竞争造成线程阻塞，也不会有死锁的问题，在性能上往往会更胜一筹。但是，如果冲突频繁发生（写占比非常多的情况），会频繁失败和重试，这样同样会非常影响性能，导致 CPU 飙升。
+- 乐观锁通常多用于写比较少的情况（多读场景，竞争较少），这样可以避免频繁加锁影响性能。不过，乐观锁主要针对的对象是单个共享变量
+
+- 悲观锁通常多用于写比较多的情况（多写场景，竞争激烈），这样可以避免频繁失败和重试影响性能，悲观锁的开销是固定的。
 
 #### 如何实现乐观锁？
 
-
+乐观锁一般会使用版本号机制或 CAS 算法实现，CAS 算法相对来说更多一些，这里需要格外注意。
 
 #### 乐观锁存在什么问题？
 
-
-
-#### 写一个必然死锁的例子
-
-
+- ABA 问题是乐观锁最常见的问题。
+- 循环时间长开销大
+- 只能保证一个共享变量的原子操作
 
 #### 生产中什么场景下会发生死锁？
 
-
+获多个锁的场景都有风险，最明显的是在一个方法内需要获取多个锁，或者形成锁环路。
 
 #### 发生死锁必须满足哪些条件？
 
-
+1. 互斥条件：一个资源每次只能被一个进程使用。
+2. 占有且等待：一个进程因请求资源而阻塞时，对已获得的资源保持不放。
+3. 不可强行占有：进程已获得的资源，在末使用完之前，不能强行剥夺。
+4. 循环等待条件：存在循环等待链，每个线程以获得的资源同时被下一个线程请求。
 
 #### 如何用工具定位死锁？
 
-
+jstack pid
 
 #### 有哪些解决死锁问题的策略？
 
-
-
-#### 讲一讲经典的哲学家就餐问题
-
-
+- 避免策略
+- 检测与恢复策略（一段时间检测是否有死锁，有就剥夺一个资源，来打开死锁）
 
 #### 实际开发中如何避免死锁？
 
-
+- 获取锁的时候，设置超时时间
+- 多使用成熟的并发类，而不是自己设计锁，降低风险
+- 给线程起个有辨别性的名字
 
 #### 什么是活跃性问题？活锁、饥饿、死锁有什么区别？
 
@@ -1579,7 +1726,7 @@ synchronized 保证了统一时间只有一个线程能够访问，就保证了�
 
 #### 能说说工作中线程池的应用吗？
 
-
+数据库连接池，tomcat 接受请求的线程池，批处理任务线程池。
 
 #### 如何让 Java 的线程池顺序执行任务？
 
@@ -1597,75 +1744,302 @@ executor.shutdown();
 
 #### 什么是线程池？如何实现？
 
+线程池是池化技术的一种典型实现，所谓池化技术就是提前保存大量的资源，以备不时之需。在机器资源有限的情况下，使用池化技术可以大大的提高资源的利用率，提升性能等。
 
+线程池，说的就是提前创建好一批线程，然后保存在线程池中，当有任务需要执行的时候，从线程池中选一个线程来执行任务。
 
 #### 线程池的主要参数有哪些？
 
-
+- **acc** : 获取调用上下文 
+- **corePoolSize**: 核心线程数量，可以类比正式员工数量，常驻线程数量。 
+- **maximumPoolSize**: 最大的线程数量，公司最多雇佣员工数量。常驻+临时线程数量。 
+-  **workQueue**：多余任务等待队列，再多的人都处理不过来了，需要等着，在这个地方等。 
+- **keepAliveTime**：非核心线程空闲时间，就是外包人员等了多久，如果还没有活干，解雇了。 
+- **threadFactory**: 创建线程的工厂，在这个地方可以统一处理创建的线程的属性。每个公司对员工的要求不一样，恩，在这里设置员工的属性。 
+- **handler**：线程池拒绝策略，什么意思呢？就是当任务实在是太多，人也不够，需求池也排满了，还有任务咋办？默认是不处理，抛出异常告诉任务提交者，我这忙不过来了。 
 
 #### 如何给线程池命名
 
+- 利用 Guava 的 ThreadFactoryBuilder 创建 ThreadFactory
 
+```java
+ThreadFactory threadFactory = new ThreadFactoryBuilder()
+                        .setNameFormat(threadNamePrefix + "-%d")
+                        .setDaemon(true).build();
+ExecutorService threadPool = new ThreadPoolExecutor(corePoolSize, maximumPoolSize, keepAliveTime, TimeUnit.MINUTES, workQueue, threadFactory);
+```
+
+- 自己实现 ThreadFactory
+
+```java
+public static class DefaultThreadFactory implements ThreadFactory {
+    private static final AtomicInteger GROUP_COUNTER = new AtomicInteger(1);
+    private static final ThreadGroup group = new ThreadGroup("MyThreadPool-" + GROUP_COUNTER.getAndDecrement());
+    private static final AtomicInteger COUNTER = new AtomicInteger(0);
+    @Override
+    public Thread createThread(Runnable runnable) {
+        return new Thread(group, runnable, "thread-pool-" + COUNTER.getAndDecrement());
+    }
+}
+```
 
 #### 简单说一下线程池的工作流程
 
+![线程池执行流程.png](./images/线程池执行流程.png)
 
+1. 线程池刚创建时，里面没有一个线程。任务队列是作为参数传进来的。不过，就算队列里面有任务，线程池也不会马上执行它们。
+2. 当调用 `execute()` 方法添加一个任务时，线程池会做如下判断：
+   - 如果正在运行的线程数量小于 corePoolSize，那么马上创建线程运行这个任务；
+   - 如果正在运行的线程数量大于或等于 corePoolSize，那么将这个任务放入队列；
+   - 如果这时候队列满了，而且正在运行的线程数量小于 maximumPoolSize，那么还是要创建非核心线程立刻运行这个任务；
+   - 如果队列满了，而且正在运行的线程数量大于或等于 maximumPoolSize，那么线程池会根据拒绝策略来对应处理。
+3. 当一个线程完成任务时，它会从队列中取下一个任务来执行。
+4. 当一个线程无事可做，超过一定的时间（keepAliveTime）时，线程池会判断，如果当前运行的线程数大于 corePoolSize，那么这个线程就被停掉。所以线程池的所有任务完成后，它最终会收缩到 corePoolSize 的大小。
 
 #### 线程数设定成多少合适？
 
+> 线程数设定是个高频出现的题目，这个题目对于优秀的面试官希望得到的答案是面试者的思考过程，考察其分析线程数设定的思考方向是否全面(主要包括对操作系统线程的理解和实际设置经验)。
+>
+> 比较差的面试官才会认为固定的公式是正确的。
 
+所谓的公式，一般情况下，需要根据你的任务情况来设置线程数，任务可能是两种类型，分别是CPU密集型和IO密集型。
+
+- 如果是CPU密集型应用，则线程池大小设置为N+1 
+- 如果是IO密集型应用，则线程池大小设置为2N+1 
+
+上面的 N 为 CPU 总核数，但是实际应用起来，也不要死守着公式不放，公式只是可以当作参考。
+
+很多时候，我们的应用部署在云服务器上面，有时候给我们分配的机器显示的是8核的，但是你要知道你实际上使用的只是虚拟机而已，并不是物理机，实际上大多数情况下不能发挥出 8 核的作用来。
+
+而且，上面的公式中，前提要求是知道你的应用是 IO 密集型还是 CPU 密集型，那么，到底怎么样算 IO 密集，怎么样又算 CPU 密集呢？一个应用就真的能明确的定位出来是 CPU 密集还是 IO 密集吗？
+
+还有，现在很多 CPU 都采用了超线程技术，也就是利用特殊的硬件指令，把两个逻辑内核模拟成两个物理芯片，让单个处理器都能使用线程级并行计算。所以我们经常可以看到"4核8线程的CPU"，也就是物理内核有 4 个，逻辑内核有 8 个，但是按照 4 和 8 配置都不合理，因为超线程技术整体性能提升也并不是100%的。
+
+
+所以回答的时候，最好是询问面试官什么业务场景，什么机器配置，多大的并发量，一次业务处理整体耗时是多少。
+
+然后再说可以在刚上线的时候，先根据公式大致的设置一个数值，然后再根据你自己的实际业务情况，以及不断的压测结果，再不断调整，最终达到一个相对合理的值。
+
+在说明压测的时候，要说清楚可接受的响应耗时是多少，大于这个阈值即是错误，错误率多少可接受。这样给出的线程池参数才合理。
 
 #### 线程池有哪几种工作队列？
 
-
+- **ArrayBlockingQueue**：ArrayBlockingQueue（有界队列）是一个用数组实现的有界阻塞队列，按FIFO排序量。
+- **LinkedBlockingQueue**：LinkedBlockingQueue（可设置容量队列）是基于链表结构的阻塞队列，按FIFO排序任务，容量可以选择进行设置，不设置的话，将是一个无边界的阻塞队列，最大长度为 `Integer.MAX_VALUE`，吞吐量通常要高于 `ArrayBlockingQuene`；`newFixedThreadPool` 线程池使用了这个队列
+- **DelayQueue**：DelayQueue（延迟队列）是一个任务定时周期的延迟执行的队列。根据指定的执行时间从小到大排序，否则根据插入到队列的先后排序。`newScheduledThreadPool` 线程池使用了这个队列。
+- **PriorityBlockingQueue**：`PriorityBlockingQueue`（优先级队列）是具有优先级的无界阻塞队列
+- **SynchronousQueue**：SynchronousQueue（同步队列）是一个不存储元素的阻塞队列，每个插入操作必须等到另一个线程调用移除操作，否则插入操作一直处于阻塞状态，吞吐量通常要高于 `LinkedBlockingQuene`，`newCachedThreadPool` 线程池使用了这个队列。
 
 #### 为什么不建议通过 Executors 构建线程池？
 
-
+Executors 创建的线程池没有设置任务队列的长度，可以添加 Integer.MAX 个任务，会导致 OOM。
 
 #### 线程池的拒绝策略有哪些？
 
+默认有 4 种，对应 `java.util.concurrent.RejectedExecutionHandler`  的实现类：
 
+- `java.util.concurrent.ThreadPoolExecutor.AbortPolicy`
+  - 这是默认的拒绝策略，当线程池无法接受新任务时，会抛出 `RejectedExecutionException` 异常。这意味着新任务会被立即拒绝，不会加入到任务队列中，也不会执行。通常情况下都是使用这种拒绝策略。
+- `java.util.concurrent.ThreadPoolExecutor.DiscardPolicy`
+  - 这个策略在任务队列已满时，会丢弃新的任务而且不会抛出异常。新任务提交后会被默默地丢弃，不会有任何提示或执行。这个策略一般用于日志记录、统计等不是非常关键的任务。
+- `java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy`
+  - 这个策略也会丢弃新的任务，但它会先尝试将任务队列中最早的任务删除，然后再尝试提交新任务。如果任务队列已满，且线程池中的线程都在工作，可能会导致一些任务被丢弃。这个策略对于一些实时性要求较高的场景比较合适。
+- `java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy`
+  - 这个策略将任务回退给调用线程，而不会抛出异常。调用线程会尝试执行任务。这个策略可以降低任务提交速度，适用于任务提交者能够承受任务执行的压力，但希望有一种缓冲机制的情况。
 
 #### 线程池提交 execute 和 submit 有什么区别？
 
+- execute 用于提交不需要返回值的任务
 
+- submit 方法用于提交需要返回值的任务。线程池会返回一个 Future 类型的对象，通过这个 Future 对象可以判断任务是否执行成功，并且可以通过 Future 的 get() 方法来获取返回值
 
 #### 线程池怎么关闭？
 
+可以通过调用线程池的 `shutdown` 或 `shutdownNow` 方法来关闭线程池。它们的原理是遍历线程池中的工作线程，然后逐个调用线程的 interrupt 方法来中断线程，所以无法响应中断的任务可能永远无法终止。
 
+- `shutdown()` 将线程池状态置为 shutdown,并不会立即停止：
+  - 停止接收外部 submit 的任务
+  - 内部正在跑的任务和队列里等待的任务，会执行完
+  - 等到第二步完成后，才真正停止
+
+- `shutdownNow()` 将线程池状态置为 stop。一般会立即停止，事实上不一定：
+  - 和 `shutdown()` 一样，先停止接收外部提交的任务
+  - 忽略队列里等待的任务
+  - 尝试将正在跑的任务 interrupt 中断
+  - 返回未执行的任务列表
+
+**shutdown 和 shutdownNow 简单来说区别如下：**
+
+shutdownNow() 能立即停止线程池，正在跑的和正在等待的任务都停下了。这样做立即生效，但是风险也比较大。
+shutdown() 只是关闭了提交通道，用 submit() 是无效的；而内部的任务该怎么跑还是怎么跑，跑完再彻底停止线程池。
 
 #### 有哪几种常见的线程池？
 
+newFixedThreadPool (固定数目线程的线程池)
 
+newCachedThreadPool (可缓存线程的线程池)
+
+newSingleThreadExecutor (单线程的线程池)
+
+newScheduledThreadPool (定时及周期执行的线程池)
 
 #### 说一下常见的四种线程池的工作原理
 
+- **newSingleThreadExecutor**
 
+```java
+public static ExecutorService newSingleThreadExecutor(ThreadFactory threadFactory) {
+    return new FinalizableDelegatedExecutorService
+        (new ThreadPoolExecutor(1, 1,
+                                0L, TimeUnit.MILLISECONDS,
+                                new LinkedBlockingQueue<Runnable>(),
+                                threadFactory));
+}
+```
 
-#### 线程池异常怎么处理知道吗？
+> 核心线程数为 1, 最大线程数也为 1, 阻塞队列是无界队列 `LinkedBlockingQueue`，可能会导致 OOM，keepAliveTime 为 0。
 
+![SingleThreadPool执行流程](./images/SingleThreadPool执行流程.png)
 
+---- 工作流程 ----
+
+1. 提交任务
+2. 线程池是否有一条线程在，如果没有，新建线程执行任务
+3. 如果有，将任务加到阻塞队列
+4. 当前的唯一线程，从队列取任务，执行完一个，再继续取，一个线程执行任务。
+
+---- 适用场景 ----
+
+适用于串行执行任务的场景，一个任务一个任务地执行。
+
+- **newFixedThreadPool**
+
+```java
+public static ExecutorService newFixedThreadPool(int nThreads, ThreadFactory threadFactory) {
+    return new ThreadPoolExecutor(nThreads, nThreads,
+                                  0L, TimeUnit.MILLISECONDS,
+                                  new LinkedBlockingQueue<Runnable>(),
+                                  threadFactory);
+}
+```
+
+> 核心线程数和最大线程数大小一样，没有所谓的非空闲时间，即 keepAliveTime 为 0，阻塞队列为无界队列 `LinkedBlockingQueue`，可能会导致 OOM。
+
+![FixedThreadPool执行流程](./images/FixedThreadPool执行流程.png)
+
+---- 工作流程 ----
+
+1. 提交任务
+2. 如果线程数少于核心线程，创建核心线程执行任务
+3. 如果线程数等于核心线程，把任务添加到 `LinkedBlockingQueue` 阻塞队列
+4. 如果线程执行完任务，去阻塞队列取任务，继续执行。
+
+---- 适用场景 ----
+
+FixedThreadPool 适用于处理 CPU 密集型的任务，确保 CPU 在长期被工作线程使用的情况下，尽可能的少的分配线程，即适用执行长期的任务。
+
+- **newCachedThreadPool**
+
+```java
+public static ExecutorService newCachedThreadPool(ThreadFactory threadFactory) {
+    return new ThreadPoolExecutor(0, Integer.MAX_VALUE,
+                                  60L, TimeUnit.SECONDS,
+                                  new SynchronousQueue<Runnable>(),
+                                  threadFactory);
+}
+```
+
+> 核心线程数为 0，最大线程数为 `Integer.MAX_VALUE`，即无限大，可能会因为无限创建线程，导致 OOM。阻塞队列是 SynchronousQueue，非核心线程空闲存活时间为 60 秒。
+
+当提交任务的速度大于处理任务的速度时，每次提交一个任务，就必然会创建一个线程。极端情况下会创建过多的线程，耗尽 CPU 和内存资源。由于空闲 60 秒的线程会被终止，长时间保持空闲的 CachedThreadPool 不会占用任何资源。
+
+![CachedThreadPool执行流程](./images/CachedThreadPool执行流程.png)
+
+---- 工作流程 ----
+
+1. 提交任务
+2. 因为没有核心线程，所以任务直接加到 SynchronousQueue 队列。
+3. 判断是否有空闲线程，如果有，就去取出任务执行。
+4. 如果没有空闲线程，就新建一个线程执行。
+5. 执行完任务的线程，还可以存活 60 秒，如果在这期间，接到任务，可以继续活下去；否则，被销毁。
+
+---- 适用场景 ----
+
+用于并发执行大量短期的小任务。
+
+- **newScheduledThreadPool**
+
+```java
+public ScheduledThreadPoolExecutor(int corePoolSize) {
+    super(corePoolSize, Integer.MAX_VALUE, 0, NANOSECONDS,
+          new DelayedWorkQueue());
+}
+```
+
+> 最大线程数为 `Integer.MAX_VALUE`，也有 OOM 的风险，阻塞队列是 `DelayedWorkQueue`，keepAliveTime 为 0。
+>
+> - `scheduleAtFixedRate()` ：按某种速率周期执行
+> - `scheduleWithFixedDelay()`：在某个延迟后执行
+
+![ScheduledThreadPool执行流程](./images/ScheduledThreadPool执行流程.png)
+
+---- 工作流程 ----
+
+1. 线程从 `DelayQueue` 中获取已到期的 `ScheduledFutureTask`（`DelayQueue.take()`）。到期任务是指 `ScheduledFutureTask` 的 time 大于等于当前时间。
+2. 线程执行这个 `ScheduledFutureTask`。
+3. 线程修改 `ScheduledFutureTask` 的 time 变量为下次将要被执行的时间。
+4. 线程把这个修改 time 之后的 `ScheduledFutureTask` 放回 `DelayQueue` 中（`DelayQueue.add()`）。
+
+---- 适用场景 ----
+
+周期性执行任务的场景，需要限制线程数量的场景。
 
 #### 能说一下线程池有几种状态吗？
 
+![线程池状态切换图](./images/线程池状态切换图.png)
 
+**RUNNING**
 
-#### 线程池如何实现参数的动态修改？
+- 该状态的线程池会接收新任务，并处理阻塞队列中的任务;
+- 调用线程池的 `shutdown()` 方法，可以切换到 SHUTDOWN 状态;
+- 调用线程池的 `shutdownNow()` 方法，可以切换到 STOP 状态;
 
+**SHUTDOWN**
 
+该状态的线程池不会接收新任务，但会处理阻塞队列中的任务；
+队列为空，并且线程池中执行的任务也为空,进入 `TIDYING` 状态;
+
+**STOP**
+
+- 该状态的线程不会接收新任务，也不会处理阻塞队列中的任务，而且会中断正在运行的任务；
+- 线程池中执行的任务为空,进入 `TIDYING` 状态;
+
+**TIDYING**
+
+- 该状态表明所有的任务已经运行终止，记录的任务数量为 0。
+- `terminated()` 执行完毕，进入 `TERMINATED` 状态
+
+**TERMINATED**
+
+该状态表示线程池彻底终止。
 
 #### 线程池调优了解吗？
 
+- 线程池配置没有固定的公式，通常事前会对线程池进行一定评估。
 
+- 上线之前也要进行充分的测试，上线之后要建立完善的线程池监控机制。
+
+- 事中结合监控告警机制，分析线程池的问题，或者可优化点，结合线程池动态参数配置机制来调整配置。
+
+- 事后要注意仔细观察，随时调整。
 
 #### 你能设计实现一个线程池吗？
 
-
+> 考察线程池原理。
 
 #### 单机线程池断电了应该怎么处理？
 
-
+对阻塞队列持久化；正在处理任务事务控制；断电之后正在处理任务的回滚，通过日志恢复该次操作；服务器重启后阻塞队列中的数据再加载。
 
 #### Fork/Join 框架了解吗？
 
@@ -1673,7 +2047,41 @@ executor.shutdown();
 
 #### ForkJoinPool 和 ThreadPoolExecutor 区别是什么？
 
+> ForkJoinPool 和 ExecutorService 都是 Java 中常用的线程池的实现，他们主要在实现方式上有一定的区别，所以也就会同时带来的适用场景上面的区别。
 
+- ForkJoinPool
+
+首先在实现方式上，ForkJoinPool 是基于**工作窃取（Work-Stealing）**算法实现的线程池，ForkJoinPool 中每个线程都有自己的工作队列，用于存储待执行的任务。当一个线程执行完自己的任务之后，会从其他线程的工作队列中窃取任务执行，以此来实现任务的动态均衡和线程的利用率最大化。
+
+- ThreadPoolExecutor 
+
+ForkJoinPool 是基于**任务分配（Task-Assignment）**算法实现的线程池，ThreadPoolExecutor 中线程池中有一个共享的工作队列，所有任务都将提交到这个队列中。线程池中的线程会从队列中获取任务执行，如果队列为空，则线程会等待，直到队列中有任务为止。
+
+**ForkJoinPool 中的任务通常是一些可以分割成多个子任务的任务，例如快速排序。每个任务都可以分成两个或多个子任务，然后由不同的线程来执行这些子任务。在这个过程中，ForkJoinPool 会自动管理任务的执行、分割和合并，从而实现任务的动态分配和最优化执行。**
+
+
+
+ForkJoinPool 中的工作线程是一种特殊的线程，与普通线程池中的工作线程有所不同。它们会自动地创建和销毁，以及自动地管理线程的数量和调度。这种方式可以降低线程池的管理成本，提高线程的利用率和并行度。
+
+ThreadPoolExecutor 中线程的创建和销毁是静态的，线程池创建后会预先创建一定数量的线程，根据任务的数量动态调整线程的利用率，不会销毁线程。如果线程长时间处于空闲状态，可能会占用过多的资源。
+
+在使用场景上也有区别，ExecutorService 适用于处理较小的、相对独立的任务，任务之间存在一定的依赖关系。例如，处理网络请求、读取文件、执行数据库操作等任务。
+
+**ForkJoinPool 适用于于以下场景：**
+
+1. 大任务分解为小任务：适用于可以递归分解为更小任务的大型任务。ForkJoinPool 通过分而治之的方式，将大任务拆分为小任务，这些小任务可以并行处理。
+2. 计算密集型任务：对于需要大量计算且能够并行化的任务，ForkJoinPool 是一个理想的选择。它能够有效利用多核处理器的优势来加速处理过程。
+3. 异构任务并行处理：当任务之间没有或很少有依赖性时，ForkJoinPool 可以帮助并行执行这些任务，从而提高效率。
+4. 递归算法的并行化：适合于可以用递归方法解决的问题，如快速排序、归并排序、图像处理中的分区算法等。
+5. 数据聚合任务：在处理需要聚合多个数据源结果的任务时（例如，遍历树结构并聚合结果），ForkJoinPool 提供了有效的方式来并行化这一过程。
+
+> 递归方法通常涉及到一定程度的依赖性，那么上面的第三、第四点不冲突吗？
+>
+> 异构任务并行处理指的是那些彼此独立的任务，它们可以同时执行而互不干扰。在这种情况下，ForkJoinPool 很适合执行多个不相关的任务，特别是当这些任务没有数据依赖或顺序要求时。
+>
+> 尽管递归算法中的每一步通常都依赖于前一步的结果，但ForkJoinPool 的优势在于能够处理那些可以被分解成多个较小、独立子任务的递归问题。例如，在快速排序中，一旦数组被分割，每个子数组的排序可以独立进行。在这里，虽然总体上存在步骤依赖，但分解后的子任务可以并行执行。
+>
+> 所以，关键在于任务的可分解性和子任务之间的独立性。对于可分解为多个独立子任务的递归问题，ForkJoinPool 是一个强大的工具。而对于那些各个步骤紧密相连、不能有效分解的任务，ForkJoinPool 可能不是最佳选择。
 
 ## 并发容器
 
@@ -1736,39 +2144,118 @@ ConcurrentHashMap 通过弱一致性迭代器和 Segment 分离机制来实现 f
 
 #### AQS 是如何实现线程的等待和唤醒的？
 
+> AbstractQueuedSynchronizer（抽象队列同步器，以下简称 AQS）出现在 JDK 1.5 中。AQS 是很多同步器的基础框架，比如 ReentrantLock、CountDownLatch 和 Semaphore 等都是基于 AQS 实现的。除此之外，我们还可以基于 AQS，定制出我们所需要的同步器。
 
+```java
+public abstract class AbstractQueuedSynchronizer
+    extends AbstractOwnableSynchronizer
+    implements java.io.Serializable {
+}
+```
+
+**在 AQS 内部，维护了一个 FIFO 队列和一个 volatile 的 int 类型的 state 变量。在 `state=1` 的时候表示当前对象锁已经被占有了，state 变量的值修改的动作通过 CAS 来完成。**
+
+
+
+FIFO 队列用来实现多线程的排队工作，当线程加锁失败时，该线程会被封装成一个 Node 节点来置于队列尾部。
+
+![AQS - 获取锁失败](./images/AQS - 获取锁失败.png)
+
+当持有锁的线程释放锁时，AQS 会将等待队列中的第一个线程唤醒，并让其重新尝试获取锁。
+
+![AQS - 唤醒线程竞争锁](./images/AQS - 唤醒线程竞争锁.png)
+
+> 上图展示的是一个非公平锁，如果是公平锁则第一步只进行判断队列中是否有前序节点，如果有的话，直接入队列，不会进行第一次的CAS。
+
+**同步状态 —— state**
+
+```java
+// 同步状态
+private volatile int state;
+
+// 获取状态
+protected final int getState() {
+    return state;
+}
+
+// 设置状态
+protected final void setState(int newState) {
+    state = newState;
+}
+
+// CAS更新状态
+protected final boolean compareAndSetState(int expect, int update) {
+    // See below for intrinsics setup to support this
+    return unsafe.compareAndSwapInt(this, stateOffset, expect, update);
+}
+```
+
+**AQS**
+
+> AQS 中的阻塞队列是一个 CLH 队列。CLH（Craig, Landin, and Hagersten）队列是一种用于实现自旋锁的有效数据结构。
+>
+> 它是由Craig, Landin和Hagersten首次提出的，因此得名。
+
+![AQS是什么](./images/AQS是什么.png)
+
+![AQS的节点Node](./images\AQS的节点Node.png)
+
+![AQS三要素](./images/AQS三要素.png)
 
 #### CountDownLatch（倒计数器）了解吗？
 
+CountDownLatch 允许 count 个线程阻塞在一个地方，直至所有线程的任务都执行完毕。
 
+CountDownLatch 是一次性的，计数器的值只能在构造方法中初始化一次，之后没有任何机制再次对其设置值，当 CountDownLatch 使用完毕后，它不能再次被使用。
 
 #### CountDownLatch 原理是什么？
 
+CountDownLatch 是共享锁的一种实现, 它默认构造 AQS 的 state 值为 count。当线程使用 countDown() 方法时,其实使用了 `tryReleaseShared` 方法以 CAS 的操作来减少 state, 直至 state 为 0 。
 
+当调用 `await()` 方法的时候，如果 state 不为 0，那就证明任务还没有执行完毕，`await()` 方法就会一直阻塞，也就是说 `await()` 方法之后的语句不会被执行。
+
+直到 count 个线程调用了 `countDown()` 使 state 值被减为 0，或者调用 `await()` 的线程被中断，该线程才会从阻塞中被唤醒，`await()` 方法之后的语句得到执行。
 
 #### CyclicBarrier（同步屏障）了解吗？
 
-
+CyclicBarrier 的字面意思是可循环使用（Cyclic）的屏障（Barrier）。它要做的事情是：让一组线程到达一个屏障（也可以叫同步点）时被阻塞，直到最后一个线程到达屏障时，屏障才会开门，所有被屏障拦截的线程才会继续干活。
 
 #### CyclicBarrier 原理是什么？
 
-
+CyclicBarrier 内部通过一个 count 变量作为计数器，count 的初始值为 parties 属性的初始化值，每当一个线程到了栅栏这里了，那么就将计数器减 1。如果 count 值为 0 了，表示这是这一代最后一个线程到达栅栏，就尝试执行我们构造方法中输入的任务。
 
 #### Semaphore（信号量）了解吗？
 
-
+synchronized 和 ReentrantLock 都是一次只允许一个线程访问某个资源，而 **Semaphore (信号量)** 可以用来控制同时访问特定资源的线程数量。
 
 #### Semaphore 原理是什么？
 
+> Semaphore 是共享锁的一种实现，它默认构造 AQS 的 state 值为 permits，你可以将 permits 的值理解为许可证的数量，只有拿到许可证的线程才能执行。
 
+调用 `semaphore.acquire()` ，线程尝试获取许可证，如果 state >= 0 的话，则表示可以获取成功。如果获取成功的话，使用 CAS 操作去修改 state 的值 `state=state-1`。如果 `state<0` 的话，则表示许可证数量不足。此时会创建一个 Node 节点加入阻塞队列，挂起当前线程。
+
+调用  `semaphore.release()`，线程尝试释放许可证，并使用 CAS 操作去修改 state 的值 `state=state+1`。释放许可证成功之后，同时会唤醒同步队列中的一个线程。被唤醒的线程会重新尝试去修改 state 的值 `state=state-1` ，如果 `state>=0` 则获取令牌成功，否则重新进入阻塞队列，挂起线程。
 
 #### Exchanger 了解吗？
 
+Exchanger（交换者）是一个用于线程间协作的工具类。Exchanger用于进行线程间的数据交换。它提供一个同步点，在这个同步点，两个线程可以交换彼此的数据。
 
+这两个线程通过 exchange 方法交换数据，如果第一个线程先执行 `exchange()` 方法，它会一直等待第二个线程也执行 `exchange()` 方法，当两个线程都到达同步点时，这两个线程就可以交换数据，将本线程生产出来的数据传递给对方。
 
-#### Exchanger 原理是什么？
-
-
+> 假如两个线程有一个没有执行 `exchange()` 方法，则会一直等待，如果担心有特殊情况发生，避免一直等待，可以使用 `exchange(V x, long timeOut, TimeUnit unit)`  设置最大等待时长。
 
 #### CountDownLatch、CyclicBarrier、Semaphore 区别？
 
+CountDownLatch、CyclicBarrier、Semaphore 都是 Java 并发库中的同步辅助类，它们都可以用来协调多个线程之间的执行。
+
+但是，它们三者之间还是有一些区别的：
+
+**CountDownLatch 是一个计数器**，它允许一个或多个线程等待其他线程完成操作。它通常用来实现一个线程等待其他多个线程完成操作之后再继续执行的操作。
+
+**CyclicBarrier 是一个同步屏障**，它允许多个线程相互等待，直到到达某个公共屏障点，才能继续执行。它通常用来实现多个线程在同一个屏障处等待，然后再一起继续执行的操作。
+
+**Semaphore 是一个计数信号量**，它允许多个线程同时访问共享资源，并通过计数器来控制访问数量。它通常用来实现一个线程需要等待获取一个许可证才能访问共享资源，或者需要释放一个许可证才能完成操作的操作。
+
+- CountDownLatch 适用于一个线程等待多个线程完成操作的情况
+- CyclicBarrier 适用于多个线程在同一个屏障处等待
+- Semaphore 适用于一个线程需要等待获取许可证才能访问共享
