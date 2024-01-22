@@ -482,50 +482,664 @@ public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundExce
 
 #### JVM 如何保证给对象分配内存过程的线程安全？
 
+> 首先，我们先来梳理下，JVM 是如何给对象分配内存的：
+>
+> - 如果 JIT 的逃逸分析后该对象没有逃逸，那么可能优化到栈上分配。
+> - 否则对象主要分配到新生代上，如果启动了 TLAB，则分配到 TLAB 中。
+> - 如果被判断为大对象，则直接分配到直接进入老年代，譬如很长的字符串和数组，避免为大对象分配内存时由于分配担保机制带来的复制而降低效率 。可以设置 `-XX:PretenureSizeThreshold`，令大于该尺寸的对象直接进入老年代。
+
+所以，我们到这里就很清楚了，当给对象分配内存的时候，有可能在栈上分配，这自然不存在线程安全问题。除此之外，如果在堆上分配，则可能会启动 TLAB 机制，使得堆内存给线程单独划分空间，避免了线程安全的问题。
+
+同时，当不启动 TLAB 机制的时候，如果一个空间被多个线程同时分配对象，JVM 会采用 **CAS + 失败重试**的方式来避免线程问题。
+
+简而言之，是采用乐观锁的方式，只有假定该堆没有被其他线程操作的时候，当前线程才会在堆上分配对象，如果被其他线程操作，就获取当前堆中的最新标识，然后重试。
+
+#### 什么是TLAB？
+
+TLAB 是虚拟机在堆内存的 eden 划分出来的一块专用空间，是线程专属的。
+
+在虚拟机的 TLAB 功能启动的情况下，在线程初始化时，虚拟机会为每个线程分配一块 TLAB 空间，只给当前线程使用，这样每个线程都单独拥有一个空间，如果需要分配内存，就在自己的空间上分配，这样就不存在竞争的情况，可以大大提升分配效率。
+
+> 所以说，因为有了 TLAB 技术，堆内存并不是完完全全的线程共享，其 eden 区域中还是有一部分空间是分配给线程独享的。
+>
+> 这里值得注意的是，我们说 TLAB 是线程独享的，但是只是在“分配”这个动作上是线程独占的，至于在读取、垃圾回收等动作上都是线程共享的。而且在使用上也没有什么区别。
+>
+> 也就是说，虽然每个线程在初始化时都会去堆内存中申请一块 TLAB，并不是说这个 TLAB 区域的内存其他线程就完全无法访问了，其他线程的读取还是可以的，只不过无法在这个区域中分配内存而已。
+>
+> 并且，在 TLAB 分配之后，并不影响对象的移动和回收，也就是说，虽然对象刚开始可能通过 TLAB 分配内存，存放在 Eden 区，但是还是会被垃圾回收或者被移到 Survivor Space、Old Gen 等。
+
+#### TLAB 的缺点
+
+虽然在一定程度上，TLAB 大大的提升了对象的分配速度，但是 TLAB 并不是就没有任何问题的。前面我们说过，**因为 TLAB 内存区域并不是很大**，所以，有可能会经常出现不够的情况。
+
+在《实战Java虚拟机》中有这样一个例子：
+
+比如一个线程的 TLAB 空间有 100KB，其中已经使用了 80KB，当需要再分配一个 30KB 的对象时，就无法直接在 TLAB 中分配，遇到这种情况时，有两种处理方案：
+
+1. 直接在堆内存中对该对象进行内存分配。
+2. 废弃当前 TLAB，重新申请 TLAB 空间再次进行内存分配。
+
+以上两个方案各有利弊，如果采用方案1，那么就可能存在着一种极端情况，就是 TLAB 只剩下1KB，就会导致后续需要分配的大多数对象都需要在堆内存直接分配。
+
+如果采用方案2，也有可能存在频繁废弃 TLAB，频繁申请 TLAB 的情况，而我们知道，虽然在 TLAB 上分配内存是线程独享的，但是 TLAB 内存自己从堆中划分出来的过程确实可能存在冲突的，所以，TLAB 的分配过程其实也是需要并发控制的。而频繁的 TLAB 分配就失去了使用 TLAB 的意义。
+
+为了解决这两个方案存在的问题，虚拟机定义了一个 `refill_waste` 的值，这个值可以翻译为“最大浪费空间”。
+
+当请求分配的内存大于 `refill_waste` 的时候，会选择在堆内存中分配。若小于 `refill_waste` 值，则会废弃当前 TLAB，重新创建 TLAB 进行对象内存分配。
+
+前面的例子中，TLAB 总空间 100KB，使用了 80KB，剩余 20KB，如果设置的 `refill_waste` 的值为 25KB，那么如果新对象的内存大于 25KB，则直接堆内存分配，如果小于 25KB，则会废弃掉之前的那个 TLAB，重新分配一个 TLAB 空间，给新对象分配内存。
+
+> 当一个 TLAB 被填满或者废弃时，原有 TLAB 中的对象不会被移动或复制到新的 TLAB 中。在 JVM 中，一旦对象被分配在堆上，它们通常会保持在原地直到被垃圾回收。所以，当一个 TLAB 用完时，线程会简单地分配一个新的 TLAB，并在新的 TLAB 上继续对象分配。原有 TLAB 中的对象将保留在其当前位置，直到它们不再被引用并由垃圾收集器回收。
+
 #### 虚拟机中的堆一定是线程共享的吗？
 
-#### 常见的 JVM 工具有哪些
+并不一定哦！
+
+为了保证对象的内存分配过程中的线程安全性，HotSpot 虚拟机提供了一种叫做 `TLAB(Thread Local Allocation Buffer)` 的技术。
+
+在线程初始化时，虚拟机会为每个线程分配一块 TLAB 空间，只给当前线程使用，当需要分配内存时，就在自己的空间上分配，这样就不存在竞争的情况，可以大大提升分配效率。
+
+所以，“堆是线程共享的内存区域”这句话并不完全正确，因为 TLAB 是堆内存的一部分，他在读取上确实是线程共享的，但是在内存分分配上，是线程独享的。
+
+TLAB 的空间其实并不大，所以大对象还是可能需要在堆内存中直接分配。那么，对象的内存分配步骤就是先尝试 TLAB 分配，空间不足之后，再判断是否应该直接进入老年代，然后再确定是在 eden 分配还是在老年代分配。
+
+#### 常见的 JVM 工具有哪些？
+
+- jps：显示当前所有 java 进程 pid 的命令。
+- jstack：用于生成线程堆栈信息的命令，可用于诊断死锁、线程阻塞等问题。
+- jmap：可以生成 JVM 中堆内存的 dump 文件，用于分析堆内存的使用情况，排查内存泄漏等问题。
+- jstat：监控 JVM 中的类加载、GC、线程等信息。
+- jhat：使用 jhat 生成 dump 文件之后，就可以使用 jhat 命令将 dump 文件转成 html 的形式访问查看。
+- 图形化工具：JMC、JConsole、VisualVM、YourKit、JProfiler。
+- Arthas：阿里巴巴开源的 Java 诊断工具。
 
 #### 有哪些常用的 JVM 启动参数？
 
-#### 哪些语言有 GC 机制
+- **堆设置：**
+  - `-Xms`：设置堆的初始大小。
+  - `-Xmx`：设置堆的最大大小。
+
+- **栈设置：**
+  - `-Xss`：设置每个线程的栈大小。
+- **垃圾回收器设置：**
+  - `-XX:+UseG1GC`：使用 G1 垃圾回收器。
+  - `-XX:+UseParallelGC`：使用并行垃圾回收器。
+- **性能调优：**
+  - `-XX:PermSize` 和 `-XX:MaxPermSize`：在 Java 8 之前设置永久代的初始大小和最大大小。
+  - `-XX:MetaspaceSize` 和 `-XX:MaxMetaspaceSize`：在 Java 8 及以上版本设置 Metaspace 的初始大小和最大大小。
+  - `-XX:+PrintGCDetails`：打印垃圾回收的详细信息。
+- **调试和分析：**
+  - `-verbose:gc`：输出垃圾回收的详细信息。
+  - `-XX:+HeapDumpOnOutOfMemoryError`：在内存溢出时生成堆转储。
+
+#### 哪些语言有 GC 机制?
+
+Java, C#, Python, Ruby, JavaScript, Kotlin, Swift, Go, R, Lua
 
 #### 一个对象的结构是什么样的？
 
+> HotSpot JVM 设计了一个 OOP-Klass Model。OOP（Ordinary Object Pointer）指的是普通对象指针，而 Klass 用来描述对象实例的具体类型。
+
+每一个 Java 类，在被 JVM 加载的时候，JVM 会给这个类创建一个 instanceKlass，保存在方法区，用来在 JVM 层表示该 Java 类。当我们在 Java 代码中，使用 new 创建一个对象的时候，JVM 会创建一个 instanceOopDesc 对象，这个对象中包含了**对象头**、**实例数据**以及**对齐填充**。
+
+![一个对象的结构](./images/一个对象的结构.png)
+
+- **对象头（Object Header）**： 对象头是每个Java 对象的固定部分，它包含了用于管理对象的元数据信息。对象头的结构在 HotSpot 中是根据对象的类型（即是否是数组对象、是否启用偏向锁等）而变化的，但一般情况下，对象头包含以下信息：
+
+  - **Mark Word（标记字）**：用于存储对象的标记信息，包括对象的锁状态、GC标记等。
+
+  - **Class Metadata Address（类元数据地址）**：指向对象所属类的元数据信息，包括类的类型、方法、字段等。
+
+- **实例数据（Instance Data）**： 实例数据是对象的成员变量（字段）的实际存储区域，它包含了对象的各个字段的值。实例数据的大小取决于对象所包含的字段数量和字段类型。
+- **对齐填充（Padding）**： 对齐填充是为了使得对象的起始地址符合特定的对齐要求，以提高访问效率。由于虚拟机要求对象的起始地址必须是8字节的倍数（在某些平台上要求更大），因此可能需要在对象的实例数据末尾添加额外的字节来对齐。
+
+```java
+class Clazz
+{
+    public static int a = 1;
+    public int b;
+
+    public Clazz(int b) {
+        this.b = b;
+    }
+}
+
+public static void main(String[] args) {
+    int c = 10;
+    Clazz instance1 = new Clazz(2);
+    Clazz instance2 = new Clazz(3);
+}
+```
+
+当上面的代码段执行完后，会在JVM呈现出如下模式：
+
+![oop-Klass-model示例](./images/oop-Klass-model示例.png)
+
+从上图中可以看到，在方法区的 `instantKlass` 中有一个 `int a=1` 的数据存储。
+
+在堆内存中的两个对象的 oop 中，分别维护着 `int b = 3, int b = 2`的实例数据。
+
+和 `oopDesc` 一样，`instantKlass` 也维护着一些 `fields`，用来保存类中定义的类数据，比如 `int a=1`。
+
 #### JVM 是如何创建对象的？
+
+1. 首先将去检查这个指令的参数是否能在常量池中定位到这个类的符号引用，并且检查这个符号引用代表的类是否已被加载过、解析和初始化过。如果没有，那必须先执行相应的类加载过程
+2. 分配内存。JVM 会在堆中为对象分配内存空间（无 JIT 优化情况下）。在 HotSpot 中，对象的内存分配有两种方式，分别是指针碰撞和空闲列表法。
+   ○ 指针碰撞：当堆中的内存是连续的，JVM 使用一个指针来标记当前可用的内存位置，然后将指针向前移动分配对象所需的内存大小。
+   ○ 空闲列表：当堆中的内存是离散的，JVM 会维护一个空闲列表，记录可用的内存块。在分配对象时，JVM 会遍历空闲列表，找到足够大小的内存块进行分配。
+   （分配内存解决并发有两种手段，一个是 CAS + 失败重试，一个是 Thread Local Allocation  Buffer（TLAB）)
+3. 内存分配完成后，虚拟机需要将分配到的内存空间都初始化为零值，这一步确保了对象的字段在创建时都有默认值。如 int 被初始化为 0，引用类型被初始化为 null。
+4. 设置对象头。 该实例所对应的类、如何才能找到类的元数据信息、对象的哈希码、对象的 GC 分代年龄，轻量级锁等等信息。
+5. 调用该类的构造方法，初始化对象。如按照程序员意愿进行赋值。
+6. 返回对象引用，当对象完成创建之后，返回一个该对象的引用，后续Java程序就可以使用这个引用来操作对象了。
 
 #### 字符串常量池是如何实现的？
 
+> 字符串常量池（String Constant Pool）是Java中一块特殊的内存区域，用于存储字符串常量。
+>
+> 当程序中出现字符串常量时，Java 编译器会将其放入字符串常量池中。字符串常量是不可变的，因此可以共享。如果字符串常量池中已存在相同内容的字符串，编译器会直接引用已存在的字符串常量，而不会创建新的对象。
+
+在 HotSpot 虚拟机中：
+
+在 JDK 1.6 及之前的版本，字符串常量池通常被实现为方法区的一部分，即永久代（Permanent Generation），用于存储类信息、常量池、静态变量、即时编译器编译后的代码等数据。
+
+从 JDK 1.7 开始，字符串常量池的实现方式发生了重大改变。字符串常量池不再位于永久代，而是直接存放在堆（Heap）中，与其他对象共享堆内存。
+
+之所以要挪到堆内存中，主要原因是因为永久代的 GC 回收效率太低，只有在 FullGC 的时候才会被执行回收。但是 Java 中往往会有很多字符串也是朝生夕死的，将字符串常量池放到堆中，能够更高效及时地回收字符串内存。
+
+#### 字符串常量从哪来的？
+
+1. 字面量常量。在代码中直接使用双引号括起来的字符串字面值（如 `String s = "ping"`）会被认为是常量，并且会在编译后进入 class 文件的常量池，并且在运行阶段，进入字符串常量池。这是最常见的字符串常量来源。
+2. `intern()`方法。String 类提供了一个 `intern()` 方法，用于将字符串对象手动添加到字符串常量池中。调用 `intern()` 方法时，如果字符串常量池中已经存在相同内容的字符串，将会返回常量池中的引用；如果不存在，则会在常量池中创建新的字符串。
+
 #### 什么是方法区？是如何实现的？
+
+方法区是 Java 虚拟机规范定义的一块用于存储类信息、常量、静态变量、编译器编译后的代码等数据的内存区域。
+
+在 JDK 1.7 及之前的版本中，方法区通常被实现为永久代（Permanent Generation），用于存储类信息、常量池、静态变量、即时编译器编译后的代码等数据。
+
+不过在 1.6 中，方法区中包含了字符串常量池，而在 1.7 中，把字符串常量池、和静态变量都移到了堆内存中。这么做的主要原因是因为永久代的 GC 回收效率太低，只有在FullGC的时候才会被执行回收。但是 Java 中往往会有很多字符串也是朝生夕死的，将字符串常量池放到堆中，能够更高效及时地回收字符串内存。
+
+由于永久代有固定的大小，且不容易调整，因此在一些场景下容易导致内存溢出。例如，如果应用程序中使用大量的动态生成类或者频繁地加载卸载类，就可能导致永久代溢出。
+
+所以，从 JDK 1.8 开始，HotSpot 虚拟机对方法区的实现进行了重大改变。永久代被移除，取而代之的是元空间（Metaspace）。元空间是使用本地内存（Native Memory）来存储类的元数据信息的，它不再位于堆内存中。
+
+元空间的特点是可以根据应用程序的需要动态调整其大小，因此更加灵活。它能够有效地避免了永久代的内存溢出问题，并且可以减少垃圾回收的压力。元空间的内存使用量受限于操作系统对本地内存的限制。
 
 #### JVM 中一次完整的 GC 流程是怎样的？
 
+![一次完整的GC过程](./images/一次完整的GC过程.png)
+
+一般来说，GC 的触发是在对象分配过程中，当一个对象在创建时，他会根据他的大小决定是进入年轻代或者老年代。如果他的大小超过 `-XX:PretenureSizeThreshold` 就会被认为是大对象，直接进入老年代，否则就会在年轻代进行创建。（`PretenureSizeThreshold` 默认是 0，也就是说，默认情况下对象不会提前进入老年代，而是直接在新生代分配。然后就 GC 次数和基于动态年龄判断来进入老年代。）
+
+在年轻代创建对象，会发生在 Eden 区，但是这个时候有可能会因为 Eden 区内存不够，这时候就会尝试触发一次 YoungGC。
+
+年轻代采用的是标记复制算法，主要分为，标记、复制、清除三个步骤，会从 GC Root 开始进行存活对象的标记，然后把 Eden 区和 Survivor 区复制到另外一个 Survivor 区。然后再把 Eden 和 From Survivor 区的对象清理掉。
+
+这个过程，可能会发生两件事情，第一个就是 Survivor 有可能存不下这些存活的对象，这时候就会进行空间分配担保。如果担保成功了，那么就没什么事儿，正常进行 Young GC 就行了。但是如果担保失败了，说明老年代可能也不够了，这时候就会触发一次 FullGC 了。
+
+还会发生第二件事情就是，在这个过程中，会进行对象的年龄判断，如果他经过一定次数的GC之后，还没有被回收，那么这个对象就会被放到老年代当中去。
+
+而老年代如果不够了，或者担保失败了，那么就会触发老年代的 GC，一般来说，现在用的比较多的老年代的垃圾收集器是 CMS 或者 G1，他们采用的都是三色标记法。
+
+也就是分为四个阶段：初始标记、并发标记、重新标记、及并发清理。
+
+老年代在做 FullGC 之后，如果空间还是不够，那就要触发 OOM 了。
+
 #### JVM 为什么要把堆和栈区分出来呢？
+
+> 堆和栈是 JVM 中的两个区域，想要知道为什么要搞两个区域，其实只需要搞清楚他们的特点和用途之间区别是什么就行了。
+
+堆 —— 是存储对象的区域，堆的大小可以根据需要随时调整，堆的管理有垃圾回收器进行，堆内存是多个线程之间共享的。
+
+栈 —— 是每个线程独享的一块区域，用于方法调用、局部变量等的存储。
+
+**把这两者区分开的好处有以下几个：**
+
+- 首先因为他们的存储内容不同，可以分开管理。堆内存可以用垃圾回收器管理，栈内存可以靠编译器和虚拟机执行完成。
+
+- 其次，可以做到不互相影响。独立开两个不同的区域，可以做到不互相影响。堆内存溢出不会影响到栈。栈溢出也不会影响到堆。
+
+- 还有就是可以做到数据隔离，因为有了栈，就可以把一些线程独享的局部变量等内容放到栈上，可以做到更好的隔离。而共享的一些数据就可以放到堆上做统一管理。
+
+- 提升各自性能。栈上分配的效率很高，可以适合分配局部变量等，可以非常的高效。而堆上的内存分配及回收都会相对复杂。这样区分开可以做各自的优化，提升整体效率。
 
 #### 运行时常量池和字符串常量池的关系是什么？
 
+**运行时常量池**，是 `runtime constant pool`，是 Java 虚拟机规范中定义的一块逻辑区域，它是方法区的一部分，规范中说明了，它是用于存储常量、符号引用和一些编译期已知的常量数据。
+
+> 因为 Java 虚拟机规范并没有规定要如何实现方法区，所以在不同的 HotSpot 的 JDK 版本中，方法区所处的位置是不同的，所以运行时常量池所处的位置也是不一样的。
+
+Java虚拟机规范中还说，字符串字面量不应该重复的存储在运行时常量池中，应该做到可以复用。
+
+但是，以上都是规范，并不是具体实现，而字符串常量池这个东西，就是 HotSpot 的一种具体实现。
+
+HotSpot 为了复用字符串对象，定义了一个字符串常量池，它是作为字符串对象的缓存池，用于存储所有字面量形式创建的字符串。
+
+很多人认为字符串常量池和运行时常量池没啥关系，因为他们所处的位置不一样，尤其是在 JDK 1.7 之后，字符串常量池在堆上，而运行时常量池随着方法区而处于永久代或者元空间。
+
+但是，根据虚拟机规范，字符串常量，需要放在运行时常量池中。所以，我认为**字符串池就是运行时常量池的一个逻辑子区域**。即字符串池是运行时常量池的分池！
+
 #### 什么是堆外内存？如何使用堆外内存？
+
+堆外内存则是在堆之外的一块持久化的内存空间。这种内存通常由操作系统管理，因此对于大规模数据存储和快速访问来说，使用堆外内存可以提供更好的性能和控制。
+
+> 但是，需要注意的是，堆外内存不受 Java 垃圾回收机制的管理。在不再需要堆外内存时，务必手动释放内存资源，否则可能会造成内存泄漏和应用程序异常。因此，堆外内存的使用一般在特定场景和对内存管理有丰富经验的情况下才推荐使用。
+>
+> 尽管堆外内存不受 Java 堆大小的限制，但它仍然受到系统可用内存的限制。如果操作系统没有足够的可用内存供应用程序使用，就有可能导致堆外内存分配失败，从而抛出 OutOfMemoryError。
+
+在 Java 中，堆外内存就可以理解为在 JVM 之外的机器内存，想要使用堆外内存，有两种方式，分别是借助 Unsafe 类以及 NIO。
+
+NIO 中引入了 ByteBuffer 类，也可以用于处理堆外内存：
+
+使用 ByteBuffer 类的 `allocateDirect()` 方法来创建一个 `DirectByteBuffer` 实例，它表示堆外内存的缓冲区。
+
+```java
+int capacity = 1024; // 指定内存大小
+ByteBuffer buffer = ByteBuffer.allocateDirect(capacity);
+```
+
+使用 `ByteBuffer ` 的 `put()` 方法写入数据到堆外内存，使用 `get()` 方法从堆外内存读取数据。
+
+```java
+String dataToWrite = "Hello, this is hollis testing off-heap memory!";
+buffer.put(dataToWrite.getBytes());
+
+buffer.flip(); // 切换到读模式
+
+byte[] dataToRead = new byte[buffer.remaining()];
+buffer.get(dataToRead);
+
+System.out.println(new String(dataToRead));
+```
+
+由于堆外内存不受 Java 垃圾回收机制管理，需要手动释放内存资源，避免内存泄漏。通过调用 ByteBuffer 的 `cleaner()` 方法获取 Cleaner 对象，并调用其 `clean()` 方法来释放堆外内存。
+
+```java
+sun.misc.Cleaner cleaner = ((sun.nio.ch.DirectBuffer) buffer).cleaner();
+cleaner.clean();
+```
+
+虽然 DirectByteBuffer 分配的堆外内存不受 JVM 堆内存的 GC 直接管理，但 HotSpot JVM 确实提供了一种机制来间接管理这部分内存的回收。
+
+> 当我们使用 `ByteBuffer buffer = ByteBuffer.allocateDirect(1024)` 分配内存时，会在堆外占用1k的内存，同时会在堆上创建一个 ByteBuffer 对象，当然这个对象只占用一个对象的指针引用的大小。
+>
+> 堆上的 ByteBuffer 在创建时，会注册一个与之关联的清理器（cleaner）。当DirectBuffer对象变成垃圾时，清理器会在垃圾收集过程中被调用，从而释放堆外内存。
+>
+> 也就是说，当一个 DirectByteBuffer 实例不再有任何强引用指向它时，该实例就会成为垃圾收集的候选对象。在垃圾收集过程中，JVM 会检测这些 DirectByteBuffer 对象。如果 DirectByteBuffer 对象被垃圾收集器确定为垃圾，它所关联的清理器（cleaner）会被触发。清理器的任务是释放 DirectByteBuffer 分配的堆外内存。
+
+#### NIO 用堆外内存的原因
+
+1. **减少垃圾回收压力：**在传统的 Java I/O 中，使用的是堆内存，而堆内存的垃圾回收是由 JVM 自动管理的。大量频繁的垃圾回收会导致应用程序的暂停和性能下降。而使用堆外内存，则可以避免这种情况，因为堆外内存不受 JVM 垃圾回收的影响。
+2. **提高 I/O 性能：**堆外内存是直接与操作系统交互的内存，可以通过零拷贝（Zero-Copy）技术将数据从磁盘或网络读取到堆外内存，然后直接与应用程序进行数据交换，避免了数据在堆内存和堆外内存之间的复制过程。这样可以显著提高 I/O 性能，尤其是在处理大量数据时。
+3. **避免堆内存限制：**堆内存是有一定的限制的，堆内存不足可能会导致 OutOfMemoryError。使用堆外内存可以在一定程度上规避这个限制，因为它不在 Java 堆中，不受堆大小限制，只受系统可用内存的影响。
 
 #### FullGC 多久一次算正常？
 
+这个应用日常的 QPS 在 5000 以上，线上一共有 100 台左右的机器。
+
+整个集群，也就是 100 多台机器总体的数据是：
+
+- 平常情况，FullGC 次数，一周不超过一次。
+- 业务高峰期，FullGC 次数，2 小时一次。
+- FullGC耗时，400-700ms，不超过 1 秒钟。
+- YoungGC 次数，100+/分钟，YoungGC 耗时，20ms 左右
+- 堆内存利用率维持在 50% 以下。
+
+> 以上，供大家参考，一般来说，日常情况，FullGC 不应该超过一天一次的这个频率。
+
 #### 什么是跨代引用，有什么问题？
+
+JVM 的跨代引用问题是指在 Java 堆内存的不同代之间存在引用关系，导致对象在不同代之间的引用被称为跨代引用。比如：新生代到老年代的引用，老年代到新生代的引用等。
+
+![跨代引用](./images/跨代引用.png\)
+
+假如，我们现在 JVM 的堆是上面这种情况，那么在进行一次 MinorGC（YoungGC）的时候，会从 GC Root 出发，然后进行可达性分析，假如当前正在进行一次 Young GC，如果他发现一个对象处于老年代，那么 JVM 就会中断这条路径。
+
+那么这时候，JVM 就会认为只有 A 和 B 是可达的，就会在接下来的 Young GC 中把 E 回收掉，但是其实 E 是有引用的，只不过他的引用在老年代，发生了跨代引用。
+
+**想要解决解决这个问题，有两种简单的做法：**
+
+1、在做 YoungGC 的时候，GC Root 出发后扫描到老年代对象后不中断，继续扫描和标记，把所有在年轻代的对象都标记上。
+2、在 YoungGC 的实时，把老年代的所有对象也作为 GC Root，进行可达性分析扫描。
+
+**以上两种做法，其实成本都太高了**，甚至第一种要比第二种成本还要高，因为他不仅要扫描，还需要不断地做标记。
+
+> 那么，于是就有一个好的办法出现了，那就是定义了一个全局的数据结构 —— Remembered Set。
+>
+> Remembered Set 的主要作用是跟踪老年代对象与年轻代对象之间的引用关系，以帮助识别老年代中存活对象。他的核心目标是减少全堆扫描的开销。老年代中的对象通常存活更长时间，因此为了回收年轻代，JVM 需要知道哪些老年代对象引用了年轻代对象，以确保不会错误地回收正在被老年代引用的年轻代对象。
+>
+> Remembered Set 记录了老年代对象指向年轻代对象的引用关系，此后当发生 Minor GC 时，垃圾回收器不需要扫描整个老年代来确定哪些对象存活。它只需扫描 Remembered Set 中的条目，从而减少了扫描的开销。
+
+所以，在 Remember Set 中的对象也会被加入到GC Roots进行扫描：
+
+![RememberSet](./images/RememberSet.png)
+
+而在 Remembered Set 的实现中，比较常见的一种叫做 Card Table。
 
 #### 内存泄漏和内存溢出的区别是什么？
 
+内存泄漏指的是程序中分配的内存在不再需要时没有被正确释放或回收的情况。这会导致程序持续占用内存，随着时间的推移，可用内存逐渐减少，最终可能导致程序性能下降或崩溃。
+
+内存泄漏通常发生在程序中的对象或数据结构被创建后，但没有适时地释放对它们的引用，从而阻止垃圾回收器将它们清理出内存。
+
+常见的内存泄漏情况包括未关闭的文件或数据库连接、未释放的资源对象（如打开的文件句柄或网络连接）、长时间被引用的集合类（List、Map）等。
+
+内存溢出指的是程序试图分配超过其可用内存的内存空间的情况。这通常会直接导致 Java 程序崩溃。
+
+常见的内存溢出情况包括栈溢出和堆溢出。我们常说的内存溢出如果没有特别说明都是指堆溢出，即 OutOfMemory。
+
+在 Java 中，当程序动态分配内存（例如使用 new 操作符在堆中创建对象）时，没有足够的可用内存时，就会发生 OOM，即 OutOfMemoryError。
+
+一般来说，内存泄漏是会导致内存溢出的，因为内存泄漏会导致部分内存一直无法被回收，久而久之就会没有内存可以分配，就会导致内存溢出。
+
 #### 什么是编译和反编译？
+
+> 编程语言（Programming Language）分为低级语言（Low-level Language）和高级语言（High-level Language）。
+>
+> 机器语言（Machine Language）和汇编语言（Assembly Language）属于低级语言，直接用计算机指令编写程序。
+>
+> 而 C、C++、Java、Python 等属于高级语言。低级语言是计算机认识的语言、高级语言是程序员认识的语言。
+
+将便于人编写、阅读、维护的高级计算机语言所写作的源代码程序，翻译为计算机能解读、运行的低阶机器语言的程序的过程就是编译。负责这一过程的处理的工具叫做编译器。
+
+我们可以通过 javac 命令将 Java 程序的源代码编译成Java字节码，即我们常说的 class 文件。这是我们通常意义上理解的编译。但是，字节码并不是机器语言，要想让机器能够执行，还需要把字节码翻译成机器指令。这个过程是 Java 虚拟机做的，这个过程也叫编译。是更深层次的编译。
+
+我们可以把将 `.java` 文件编译成 `.class` 的编译过程称之为前端编译。把将 `.class` 文件翻译成机器指令的编译过程称之为后端编译。
+
+**反编译**的过程与编译刚好相反，就是将已编译好的编程语言还原到未编译的状态，也就是找出程序语言的源代码。就是将机器看得懂的语言转换成程序员可以看得懂的语言。Java 语言中的反编译一般指将 class 文件转换成 java 文件。
 
 #### 破坏双亲委派之后，能重写 String 类吗？
 
-#### OutOfMemory 和 StackOverflow 的区别是什么
+但是我们虽然可以通过破坏双亲委派屏蔽 Bootstrap ClassLoader，但无法重写` java. 包` 下的类，如 `java.lang.String`。
+
+> 我们知道，要破坏双亲委派模型是需要 `extends ClassLoader` 并重写其中的 `loadClass()` 和 `findClass()` 方法。
+>
+> 之所以无法替换 `java.包` 的类，主要原因是即使我们破坏双亲委派模型，依然需要调用父类中（`java.lang.ClassLoader.java`）的 `defineClass()` 方法来把字节流转换为一个 JVM 识别的 class。而 `defineClass()` 方法中通过 `preDefineClass()` 方法限制了类全限定名不能以 `java.` 开头。
+
+```java
+//将字节流转换成jvm可识别的java类
+  protected final Class<?> defineClass(String name, byte[] b, int off, int len,
+                                         ProtectionDomain protectionDomain)
+        throws ClassFormatError
+    {
+        protectionDomain = preDefineClass(name, protectionDomain);//检查类全限定名是否有效
+        String source = defineClassSourceLocation(protectionDomain);
+        Class<?> c = defineClass1(name, b, off, len, protectionDomain, source);//调用本地方法，执行字节流转JVM类的逻辑。
+        postDefineClass(c, protectionDomain);
+        return c;
+    }
+
+//检查类名的有效性
+ private ProtectionDomain preDefineClass(String name,
+                                            ProtectionDomain pd)
+    {
+        if (!checkName(name))
+            throw new NoClassDefFoundError("IllegalName: " + name);
+        if ((name != null) && name.startsWith("java.")) { //禁止替换以java.开头的类文件
+            throw new SecurityException
+                ("Prohibited package name: " +
+                 name.substring(0, name.lastIndexOf('.')));
+        }
+        if (pd == null) {
+            pd = defaultDomain;
+        }
+
+        if (name != null) checkCerts(name, pd.getCodeSource());
+
+        return pd;
+    }
+```
+
+注意，defineClassX 三兄弟是三个本地方法，用于不同参数长度的方法调用。
+
+```java
+    private native Class<?> defineClass0(String name, byte[] b, int off, int len,
+                                         ProtectionDomain pd);
+
+    private native Class<?> defineClass1(String name, byte[] b, int off, int len,
+                                         ProtectionDomain pd, String source);
+
+    private native Class<?> defineClass2(String name, java.nio.ByteBuffer b,
+                                         int off, int len, ProtectionDomain pd,
+                                         String source);
+```
+
+对应到 JDK 源码中分别为：
+
+```java
+JNIEXPORT jclass JNICALL
+Java_java_lang_ClassLoader_defineClass0(JNIEnv *env,
+                                        jobject loader,
+                                        jstring name,
+                                        jbyteArray data,
+                                        jint offset,
+                                        jint length,
+                                        jobject pd)
+                                        
+JNIEXPORT jclass JNICALL
+Java_java_lang_ClassLoader_defineClass1(JNIEnv *env,
+                                        jobject loader,
+                                        jstring name,
+                                        jbyteArray data,
+                                        jint offset,
+                                        jint length,
+                                        jobject pd,
+                                        jstring source)
+                                    
+JNIEXPORT jclass JNICALL
+Java_java_lang_ClassLoader_defineClass2(JNIEnv *env,
+                                        jobject loader,
+                                        jstring name,
+                                        jobject data,
+                                        jint offset,
+                                        jint length,
+                                        jobject pd,
+                                        jstring source)
+```
+
+这三个 C++ 方法会调用到 `SystemDictionary::resolve_from_stream` 检查全限定名是否包含 `java.`
+
+```java
+klassOop SystemDictionary::resolve_from_stream(Symbol* class_name,
+                                               Handle class_loader,
+                                               Handle protection_domain,
+                                               ClassFileStream* st,
+                                               bool verify,
+                                               TRAPS) {
+ ...//省略无关代码，以下是并检查全限定名，若包含java.，则抛出异常。
+ const char* pkg = "java/";
+  if (!HAS_PENDING_EXCEPTION &&
+      !class_loader.is_null() &&
+      parsed_name != NULL &&
+      !strncmp((const char*)parsed_name->bytes(), pkg, strlen(pkg))) {
+    ResourceMark rm(THREAD);
+    char* name = parsed_name->as_C_string();
+    char* index = strrchr(name, '/');
+    *index = '\0';
+    while ((index = strchr(name, '/')) != NULL) {
+      *index = '.';
+    }
+    const char* fmt = "Prohibited package name: %s";
+    size_t len = strlen(fmt) + strlen(name);
+    char* message = NEW_RESOURCE_ARRAY(char, len);
+    jio_snprintf(message, len, fmt, name);
+    Exceptions::_throw_msg(THREAD_AND_LOCATION,
+      vmSymbols::java_lang_SecurityException(), message);
+  }
+}
+```
+
+但是，如果破坏双亲委派的时候自己将字节流转换为一个 jvm 可识别的 class，那确实绕过 `defineClass()` 中的校验全限定名的逻辑，也就可以改写 `java.lang.String`，并加载到 JVM 中。
+
+#### OutOfMemory 和 StackOverflow 的区别是什么?
+
+OutOfMemory 是内存溢出错误，他通常发生在程序试图分配内存时，但是超出可用内存限制。这可能是因为程序使用了太多内存，或者由于内存泄漏而导致内存不断累积。
+
+StackOverflow 是栈溢出错误，他通常发生在程序的调用栈变得过深时，如递归调用。每次函数调用都会在栈上分配一些内存，当递归调用或者函数调用层次过深时，栈空间会被耗尽，从而导致 StackOverflowError。
+
+OutOfMemory 一般发生在 Java 的堆内存上，StackOverflow 一般发生在 Java 的栈内存中。但是也不绝对，在栈上也可能发生 OutOfMemory。
+
+> OutOfMemory 在具体报错上还有以下几种情况：
+>
+> 1. `Java Heap Space`：这是最常见的 OutOfMemoryError。它发生在Java堆内存不足，通常由程序中创建的对象过多或者单个对象太大引起。这种错误可能导致 Java 应用程序崩溃。
+> 2. `PermGen Space`（在Java 7之前）或 Metaspace（在Java 8及更高版本）：这种错误发生在永久代（Java 7之前）或元空间（Java 8及更高版本）不足。通常由于加载过多的类或创建过多的动态代理类等原因引起。
+> 3. `Native Heap`：这种错误发生在本机堆内存不足。Java虚拟机使用本机代码（native code）来执行某些操作，如本机方法，这些操作可能会占用本机堆内存。
+> 4. `Direct Memory`：这种错误发生在程序使用 NIO（New I/O）库或直接内存缓冲区时，由于分配了过多的直接内存而耗尽。
+> 5. `GC Overhead Limit Exceeded`：这个错误发生在垃圾收集器花费了太多时间进行垃圾回收，而没有足够的内存被释放。这通常是由于内存不足以满足垃圾收集需求而引起的。
+> 6. `Requested array size exceeds VM limit`：这个错误发生在试图创建一个太大的数组，超过了虚拟机的限制。
+> 7. `Unable to create new native thread`：这个错误发生在虚拟机无法创建更多的本机线程，通常由于操作系统限制引起。
+
+**栈上 OOM**
+
+在《Java虚拟机规范》规定了：如果虚拟机的栈内存允许动态扩展，当扩展栈容量无法申请到足够的内存时，将抛出 OutOfMemoryError 异常。
+
+在某些编程语言和运行时环境中，栈内存允许动态扩展，而不会固定在一个特定的大小。这种情况下，栈内存可以动态增加，以适应程序的需要。然而，这种实现在 Java 中并不常见，如我们常用的 Hotspot 虚拟机种，栈内存是有限且固定的，不能动态扩展。
+
+所以，在 HotSpot 虚拟机中是不会出现因为栈空间不足而抛出 OutOfMemoryError 异常的情况的，只会发生 StackOverflow。
 
 #### 什么是 Class 常量池，和运行时常量池关系是什么？
 
+Class 常量池可以理解为是 Class 文件中的资源仓库。 Class 文件中除了包含类的版本、字段、方法、接口等描述信息外，还有一项信息就是常量池(constant pool table)，用于存放编译器生成的各种字面量(Literal) 和符号引用(Symbolic References)。
+
+Class 是用来保存常量的一个媒介场所，并且是一个中间场所。Class 文件中的常量池部分的内容，会在运行期被运行时常量池加载进去。
+
 #### Java 发生了 OOM 一定会导致 JVM 退出吗？
+
+我们知道，JVM 是一个操作系统的进程，而在Linux和其他类Unix操作系统中，当一个进程在执行非法内存访问时，如访问未分配给它的内存或者访问超出其允许范围的内存时，操作系统会向该程序发送 SIGSEGV 信号（“段错误”（Segmentation Fault）），若进程没有注册信号处理函数会直接退出，并产生 **Segment Fault** 错误提示。
+
+**而我们熟知的 OutOfMemoryError，StackOverflowError 就是 Segment Fault 的具体情况**，不过，JVM 被设计成能够容忍和隔离单个线程出现问题，当一个线程崩溃时，JVM 会尝试将问题限定在该线程内，而不会影响其他线程或整个应用程序。
+
+也就是说，即使我们的线程执行过程中，发生了 OutOfMemoryError，StackOverflowError 等这些问题了，也并不代表 JVM 就一定要立即退出或者崩溃。
+
+主要是因为，OutOfMemoryError，StackOverflowError 等这些我们看到的 ERROR，已经是 JVM 在注册了 SIGSEGV 信号处理函数之后，经过自己的处理之后抛给我们的错误了。（这部分源码在文末）
+
+而 OutOfMemoryError，StackOverflowError 等这些错误跑给我们之后，其实都是可以被 catch 的，如果被 catch 掉之后，程序还是可以正常执行，而不会崩溃退出的。
+
+所以说，Java 中的所有线程的崩溃，包括主线程、子线程，并不是说一定就会导致 JVM 直接崩溃的。
 
 #### 什么是 safe point，有啥用？
 
-#### JDK1.8 和 1.9 中类加载器有哪些不同
+安全点，简单点说就是代码执行过程中的一些特殊位置，当线程执行到这个位置的时候，可以被认为处于“安全状态”，如果有需要，可以在这里暂停，在这里暂停是安全的！
+
+> 哪些操作需要等到安全点呢？其实网上总结了很多，难道要死记硬背吗？不需要，只需要记住：当JVM需要对线程进行挂起的时候，会等到安全点在执行。
+>
+> 安全点通常出现在不会改变共享数据状态的位置，例如在方法调用、循环迭代和异常抛出的地方。
+
+因为安全点确保了线程在可预测和一致的状态下停止。这是非常重要的，因为我们后面要提及的各种操作，如 GC、JIT优化、偏向锁撤销、线程 Dump 等的，都需要 JVM 能保证线程不会再修改共享数据，那如何保证呢？那就是安全点了。
+
+> 那么，JVM 中什么情况会把线程挂起呢？
+
+**垃圾回收：**
+
+- 当JVM进行垃圾回收时，需要暂停应用中的所有线程（称为“Stop-The-World”，STW），以防止它们在内存回收过程中修改对象。在这个过程中，只有当所有线程都运行到了安全点，JVM才会开始垃圾收集。
+
+**偏向锁撤销：**
+
+- 偏向锁是针对单一线程优化的。当另一个线程尝试获取相同锁时，JVM 需要撤销原有线程的偏向锁状态，以便其他线程能够竞争该锁。为了安全地完成这个过程，JVM 必须确保持有偏向锁的线程不在执行与该锁相关的代码。因此，JVM 会将这个线程挂起，直到它到达安全点。
+
+**代码热替换：**
+
+- 在某些情况下，比如使用 JVM 的调试工具时，开发者可能需要在运行时替换或修改类的定义。为了确保这种替换可以安全地发生，JVM 会等到线程到达安全点。
+
+**获取Dump：**
+
+- 对线程/堆进行 Dump 时（执行 jstack、jmap 等命令时），是想要获取线程或者堆在特定时刻的状态和信息。为了确保这些信息的准确性和一致性，JVM 在进行 Dump 时会暂停所有线程。也需要进入安全点才行。
+
+**死锁检测：**
+
+- 和 Dump 一样，当 JVM 执行死锁检测时，需要挂起线程，以获取线程间锁的精确状态。也需要进入安全点。
+
+**JIT 编译优化：**
+
+- 在进行 JIT 编译时，如果相关代码正在被线程执行，那么这些线程需要被挂起，以确保编译过程中代码的一致性和稳定性。这样可以防止正在运行的线程执行未完成优化的代码，确保代码优化的正确性和程序的稳定运行。同理，也需要进入安全点。
+
+**定时进入：**
+
+- JVM 有一个参数 `-XX:GuaranteedSafepointInterval`，他的作用是设置 JVM 在执行长时间运行的代码时强制进行安全点检查的时间间隔。这有助于确保即使在执行长时间的计算操作时，JVM 也能定期进行如垃圾回收等全局操作。这个参数通常用于性能调优，以在长时间计算和系统管理操作之间取得平衡。
 
 #### 什么是逃逸分析？
 
+逃逸分析是 Java HotSpot Server 编译器中 JIT 优化的一个重要步骤。它在 Java SE 6u23 及以后的版本中默认启用。
+
+对象基于逃逸分析可以有三种状态：全局逃逸（GlobalEscape）、参数逃逸（ArgEscape）和无逃逸（NoEscape）。
+
+- 全局逃逸（GlobalEscape）：对象超出了方法或线程的范围，比如被存储在静态字段或作为方法的返回值。
+
+```java
+public class GlobalEscapeExample {
+    private static Object staticObject;
+
+    public void globalEscape() {
+        staticObject = new Object(); // 这个对象赋值给静态字段，因此它是全局逃逸的
+    }
+}
+
+public static StringBuffer craeteStringBuffer(String s1, String s2) {
+    StringBuffer sb = new StringBuffer();
+    sb.append(s1);
+    sb.append(s2);
+    return sb;
+}
+```
+
+- 参数逃逸（ArgEscape）：对象被作为参数传递或被参数引用，但在方法调用期间不会全局逃逸。
+
+```java
+public class ArgEscapeExample {
+    public void methodA() {
+        Object localObject = new Object();
+        methodB(localObject); // localObject 作为参数传递，但不会从 methodB 中逃逸
+    }
+
+    public void methodB(Object param) {
+        // 在这里使用 param, 就是发生了参数逃逸, 从 methodA 中逃逸到了 methodB 中
+    }
+}
+```
+
+- 无逃逸（NoEscape）：对象可以被标量替换，意味着它的内存分配可以从生成的代码中移除。
+
+```java
+public static String createStringBuffer(String s1, String s2) {
+    StringBuffer sb = new StringBuffer();
+    sb.append(s1);
+    sb.append(s2);
+    return sb.toString();
+}
+```
+
+> 在 Java 中，不同的逃逸状态影响 JIT（即时编译器）的优化策略：
+>
+> 1. 全局逃逸（GlobalEscape）：由于对象可能被多个线程访问，全局逃逸的对象一般不适合进行栈上分配或其他内存优化。但 JIT 可能会进行其他类型的优化，如方法内联或循环优化。
+> 2. 参数逃逸（ArgEscape）：这种情况下，对象虽然作为参数传递，但不会被方法外部的代码使用。JIT 可以对这些对象进行一些优化，例如锁消除
+> 3. 无逃逸（NoEscape）：这是最适合优化的情况。JIT 可以采取多种优化措施，如在栈上分配内存，消除锁，甚至完全消除对象分配（标量替换）。这些优化可以显著提高性能，减少垃圾收集的压力。
+
+| 优化手段 | 全局逃逸 | 参数逃逸 | 无逃逸 |
+| -------- | -------- | -------- | ------ |
+| 方法内联 | Y        | Y        | Y      |
+| 循环优化 | Y        | Y        | Y      |
+| 锁消除   | N        | Y        | Y      |
+| 栈上分配 | N        | N        | Y      |
+
+总的来说，JIT 编译器根据对象的逃逸状态采用不同的优化策略，以提高 Java 程序的性能和效率。
+
 #### 什么是 AOT 编译？和 JIT 有啥区别？
+
+我们都知道，Java 中有两种编译方法：
+
+1. javac 把  java 代码编译成字节码，然后由 Java 虚拟机解释执行。
+2. JIT 把 java 代码直接编译成机器码，然后由 Java 虚拟机直接运行。
+
+但是，JIT 编译有一些比较明显的缺点也是不能忽视的：
+
+1. 增加启动时间：由于JIT 编译器在程序运行时编译代码，它可能导致应用程序的启动时间较长。
+2. 可能会影响应用性能：JIT 编译是需要进行热点代码检测、代码编译等动作的，这些都是要占用运行期的资源，所以，JIT 编译过程中也可能会影响应用性能。
+
+
+
+而在如今的云原生盛行的今天，应用的快速启动以及减少预热时长是非常重要的，其实是 Serverless 场景中，所以，一个新兴的编译器 GraalVM 就诞生了。他提出了一种新的编译方式——Ahead of Time，即 AOT 编译。
+
+AOT 编译，翻译一下就是提前编译，它不像JIT一样在运行期才生成机器码，而是在编译期间就将字节码转换为机器码，这就直接省去了运行时对 JVM 的依赖。
+
+> 因为 AOT 编译是在编译期就生成机器代码了，所以，应用启动时就不需要编译，那么他就可以大大的减少应用的启动时间，提升系统的整体性能。所以他非常适用于对启动时间敏感的场景，例如云原生应用。
