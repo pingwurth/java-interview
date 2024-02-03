@@ -80,17 +80,35 @@ Java 学习 + 面试指南
 
 ### 算法系列
 
-**LeetCode**
+**LeetCode（全）**
 
 - 系统学习：https://leetcode.cn/leetbook/
 - 题库：https://leetcode.cn/problemset/all/
 
-**大佬整理**
+**牛客网在线编程**
 
-- https://github.com/krahets/hello-algo
-- https://wansuanfa.com
+- https://www.nowcoder.com/exam/oj?page=1&tab=%E7%AE%97%E6%B3%95%E7%AF%87&topicId=295
 
-- https://github.com/geekxh/hello-algorithm
+**大佬整理（高频）**
+
+- 《Hello 算法》：动画图解、一键运行的数据结构与算法教程
+  - https://www.hello-algo.com/
+  - https://github.com/krahets/hello-algo
+- 用动画的形式呈现解LeetCode题目的思路
+  - https://blog.algomooc.com/
+  - https://github.com/MisterBooo/LeetCodeAnimation
+
+- 小浩算法 - 针对小白的算法训练
+  - https://www.lintcode.com/
+  - https://github.com/geekxh/hello-algorithm
+
+
+- LeetCode、《剑指 Offer（第 2 版）》、《程序员面试金典（第 6 版）》题解
+
+  - https://doocs.github.io/leetcode/
+
+
+  - https://github.com/doocs/leetcode
 
 **其他算法学习网站**
 
@@ -104,6 +122,110 @@ Java 学习 + 面试指南
 - 算法可视化（超牛）：https://algorithm-visualizer.org/
 - 常用数据结构算法复杂度：https://www.bigocheatsheet.com/
 - 代码实现打印二叉树：https://www.bigocheatsheet.com/
+
+**算法相关书籍**
+
+![算法相关书籍](./images/算法相关书籍.png)
+
+- 数据结构(C++语言版)第三版_邓俊辉
+- 大话数据结构
+- Hello算法
+- 漫画算法小灰的算法之旅
+- 剑指OFFER(第2版)
+- 算法(第4版)
+- 算法导论(第三版)-中文版
+- 具体数学 计算机科学基础
+- 数据结构与算法分析 java语言描述
+
+> 链接：https://pan.baidu.com/s/1NU-gpQ7g2s5BJmmUL7WenA?pwd=var4 
+> 提取码：var4 
+
+**实在学得吃力、学不下去，就看视频学**
+
+- 学堂在线 -【国家精品课】清华大学《数据结构》邓俊辉
+  - https://www.xuetangx.com/course/THU08091000384/19318292
+  - https://www.xuetangx.com/course/THU08091002048/19318085
+
+- 中国大学MOOC -【国家精品课】浙江大学《数据结构》
+  - https://www.icourse163.org/course/ZJU-93001
+- 中国大学MOOC -【国家精品课】华中科技大学《数据结构》
+  - https://www.icourse163.org/course/HUST-1001907004
+- 中国大学MOOC -【国家精品课】南京邮电大学《数据结构》 
+  - https://www.icourse163.org/course/NJUPT-1206361803
+
+**如果上面这些你还学不下去，就花钱吧**
+
+- 【慕课网】算法与数据结构体系课
+  - https://class.imooc.com/sale/datastructure
+- 【慕课网】算法与数据结构高手养成-求职提升特训课
+  - https://coding.imooc.com/class/589.html
+- 【慕课网】玩转算法面试 -- Leetcode真题分门别类讲解
+  - https://coding.imooc.com/class/82.html
+- 【慕课网】算法与数据结构（C++版） 面试/评级的算法复习技能包
+  - https://coding.imooc.com/class/71.html
+- 【慕课网】玩转算法系列 -- 图论精讲 （Java版）
+  - https://coding.imooc.com/class/370.html
+- 【慕课网】算法面试专题--竞赛命题人带你刷70+中高级题型
+  - https://coding.imooc.com/class/478.html
+- 【慕课网】7个经典应用诠释Java算法精髓
+  - https://coding.imooc.com/class/138.html
+- 【慕课网】JavaScript版数据结构与算法 轻松解决前端算法面试
+  - https://coding.imooc.com/class/446.html
+
+### 算法进阶 + 数学 + 应用
+
+**算法进阶**
+
+- 【慕课网】个性化推荐算法实战（可用于毕设）
+  - https://coding.imooc.com/class/297.html
+
+- 【慕课网】Python3入门机器学习 经典算法与应用
+  - https://coding.imooc.com/class/169.html
+- 【慕课网】Python3入门人工智能，掌握机器学习+深度学习
+  - https://coding.imooc.com/class/418.html
+- 【慕课网】玩转机器学习之神经网络，系统入门算法工程师
+  - https://coding.imooc.com/class/547.html
+- 【慕课网】深度学习之目标检测常用算法原理+实践精讲
+  - https://coding.imooc.com/class/chapter/298.html
+- 【慕课网】PyTorch入门到进阶，实战计算机视觉与自然语言处理
+  - https://coding.imooc.com/class/440.html
+
+**数学**
+
+- 【慕课网】专为程序员设计的高数补习班 贴合开发讲解高数
+  - https://coding.imooc.com/class/427.html
+
+- 【慕课网】结合编程学数学 专为程序员设计的线性代数
+  - https://coding.imooc.com/class/260.html
+- 【慕课网】专为程序员设计的统计课
+  - https://coding.imooc.com/class/371.html
+- 【慕课网】讲透机器学习概率统计，快速打造算法基础核心能力
+  - https://coding.imooc.com/class/545.html
+
+**应用**
+
+- 【慕课网】Kaggle 竞赛经典案例深度剖析
+  - https://coding.imooc.com/class/504.html
+
+- 【慕课网】程序员理财课 Python 量化交易系统实战
+  - https://coding.imooc.com/class/494.html
+- 【慕课网】Python 量化交易工程师养成实战-金融高薪领域
+  - https://coding.imooc.com/class/371.html
+- 【慕课网】PyTorch 深度学习开发医学影像端到端判别项目
+  - https://coding.imooc.com/class/612.html
+
+**AI 方向学习路线**
+
+- 【慕课网】Python量化交易开发从入门到就业系统养成
+  - https://coding.imooc.com/learningpath/route?pathId=57
+- 【慕课网】快速入门深度学习之目标检测
+  - https://coding.imooc.com/learningpath/route?pathId=48
+- 【慕课网】从0入门人工智能学习
+  - https://coding.imooc.com/learningpath/route?pathId=28
+- 【慕课网】AI人工智能算法工程师
+  - https://class.imooc.com/sale/aialgorithm
+- 【慕课网】LLM大语言模型算法特训  带你转型AI大语言模型算法工程师
+  - https://class.imooc.com/sale/llm
 
 ### 免费学习网站
 
