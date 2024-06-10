@@ -742,7 +742,7 @@ GitHub stars 228k+ 系统设计入门
 
 ## 场景设计
 
-[面试题-场景设计](./16_scene-design/面试题-场景设计.md)
+[面试题-场景设计和线上问题排查](./16_scene-design/面试题-场景设计和线上问题排查.md)
 
 <blockquote alt="info"><p>学习方式：实战 + 各种技术文章 + 各种自媒体</p></blockquote> 
 
