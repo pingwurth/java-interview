@@ -950,9 +950,41 @@ Biggest hash found so far 'myhash' with 412 fields
 
 **先删缓存**
 
-如果我们的是先删除缓存，再更新数据库，有一个好处，那就是：如果是先删除缓存成功了，但是第二步更新数据库失败了，这种情况是可以接受的，因为这样只是把缓存给清空了而已，但是不会有脏数据，也没什么影响，只需要重试就好了。
 
-但是，先删除缓存后写数据库的这种方式，会无形中放大"读写并发"导致的数据不一致的问题。我们知道，当我们使用了缓存之后，一个读的线程在查询数据的过程是这样的：
+
+如果我们的是先删除缓存，再更新数据库，有一个好处，那就是：**如果是先删除缓存成功了，但是第二步更新数据库失败了，这种情况是可以接受的**，因为这样只是把缓存给清空了而已，但是不会有脏数据，也没什么影响，只需要重试就好了。
+
+但是，**先删除缓存后写数据库的这种方式，会无形中放大"读写并发"导致的数据不一致的问题**。我们知道，当我们使用了缓存之后，一个读的线程在查询数据的过程是这样的：
+
+1、查询缓存，如果缓存中有值，则直接返回 
+2、查询数据库 
+3、把数据库的查询结果更新到缓存中
+
+所以，对于一个读线程来说，虽然不会写数据库，但是是会更新缓存的，所以，在一些特殊的并发场景中，就会导致数据不一致的情况。
+
+读写并发的时序如下：
+
+| thread-1       | thread-2                        |
+| -------------- | ------------------------------- |
+| 删除缓存       |                                 |
+|                | 读缓存，缓存中没有值            |
+|                | 读数据库，数据库中得到结果为10  |
+| 更新数据库：20 |                                 |
+|                | 写缓存，更新成 10（数据不一致） |
+
+> 也就是说，假如一个读线程，在读缓存的时候没查到值，他就会去数据库中查询，但是如果自查询到结果之后，更新缓存之前，数据库被更新了，但是这个读线程是完全不知道的，那么就导致最终缓存会被重新用一个"旧值"覆盖掉。
+>
+> 
+>
+> 这也就导致了缓存和数据库的不一致的现象。
+
+但是这种现象其实发生的概率比较低，因为一般一个读操作是很快的，数据库+缓存的读操作基本在十几毫秒左右就可以完成了。**而在这期间，刚好另一个线程执行了一个比较耗时的写操作的概率确实比较低**。
+
+因为这种"读写并发"问题发生的前提是读线程读缓存没读到值，而先删缓存的动作一旦发生，刚好可以让读线程就从缓存中读不到值。
+
+所以，本来一个小概率会发生的"读写并发"问题，在先删缓存的过程中，问题发生的概率会被放大。
+
+而且这种问题的后果也比较严重，那就是缓存中的值一直是错的，就会导致后续的所有命中缓存的查询结果都是错的！
 
 
 
@@ -960,68 +992,1779 @@ Biggest hash found so far 'myhash' with 412 fields
 
 
 
+如果我们先更新数据库，再删除缓存，有一个好处，那就是**缓存删除失败的概率还是比较低的**，除非是网络问题或者缓存服务器宕机的问题，否则大部分情况都是可以成功的。
+
+并且这个方案还有一个好处，那就是数据库是作为持久层存储的，先更新数据库就能确保数据先写入持久层可以保证数据的可靠性和一致性，即使在删除缓存失败的情况下，数据库中已有最新数据。
+
+但是这个方案也存在一个问题，那就是先写数据库，后删除缓存，如果第二步失败了，会导致数据库中的数据已经更新，但是缓存还是旧数据，**导致数据不一致**。
+
+那么怎么解决呢？
+
+
+
 **延迟双删**
 
 
 
+所谓延迟双删，其实是：
+
+1、先删除缓存
+2、更新数据库
+3、删除缓存
+
+> 第一次删除缓存的原因：
+>
+> 第一次之所以要选择先删除缓存，而不是直接更新数据库，主要是因为先写数据库会存在一个比较关键的问题，那就是缓存的更新和数据库的更新不是一个原子操作，那么就存在失败的可能性。
+>
+> 如果写数据库成功了，但是删缓存失败了！那么就会导致数据不一致。
+>
+> 而如果先删缓存成功了，后更新数据库失败了，没关系，因为缓存删除了就删除了，又不是更新，不会有错误数据，也没有不一致问题。
+>
+> 并且，相对于缓存和数据库来说，数据库的失败的概率更大一些，并且删除动作和更新动作来说，更新的失败的概率也会更大一些。
+>
+> 
+>
+> 所以，为了避免这个因为两个操作无法作为一个原子操作而导致的不一致问题，我们选择先删除缓存，再更新数据库。这是第一次删除缓存的原因。
+>
+> 
+>
+> 一般来说，一些并发量不大的业务，这么做就已经可以了，先删缓存，后更新数据（如果业务量不大，其实先更新数据库，再删除缓存其实也可以），基本上就能满足业务上的需求了。
+>
+> 但是如果是并发量比较高的话，那么就可能存在一定的问题。
+>
+> 因为先删缓存再更新数据库的话，第一步先把缓存给清了，会放大读写并发导致的不一致的情况。
+
+那么这个问题怎么解决呢？怎么避免缓存在更新后，又被一个其他的线程给把脏数据覆盖进去呢，那么就需要第二次删除了，就是我们的延迟双删。
+
+因为"读写并发"的问题会导致并发发生后，缓存中的数被读线程写进去脏数据，那么就只需要在写线程在删缓存、写数据库之后，延迟一段时间，再执行一把删除动作就行了。
+
+这样就能保证缓存中的脏数据被清理掉，避免后续的读操作都读到脏数据。当然，这个延迟的时长也很有讲究，到底多久来删除呢？一般建议设置 1-2s 就可以了。
+
+当然，这种方案也是有一个弊端的，那就是可能会导致缓存中准确的数据被删除掉。当然这也问题不大，就像我们前面说过的，只是增加一次 cache miss 罢了。
+
+所以，为了避免因为先删除缓存而导致的”读写并发问题“被放大的情况，所以引入了第二次缓存删除。
+
 #### Redis 如何实现延迟消息？
+
+
+
+**Redis过期消息实现延迟消息**
+
+
+
+很多用过 Redis 的人都知道，Redis有一个过期监听的功能，
+
+在 redis.conf 中，加入一条配置 notify-keyspace-events Ex 开启过期监听，然后再代码中实现一个 KeyExpirationEventMessageListener，就可以监听 key 的过期消息了。
+
+这样就可以在接收到过期消息的时候，进行订单的关单操作。
+
+这个方案不建议大家使用，是因为 Redis 官网上明确的说过，Redis 并不保证 Key 在过期的时候就能被立即删除，更不保证这个消息能被立即发出。所以，消息延迟是必然存在的，随着数据量越大延迟越长，延迟个几分钟都是常事儿。
+
+而且，在 Redis 5.0 之前，这个消息是通过 PUB/SUB 模式发出的，他不会做持久化，至于你有没有接到，有没有消费成功，他不管。也就是说，如果发消息的时候，你的客户端挂了，之后再恢复的话，这个消息你就彻底丢失了。
+
+
+
+**Redis 的 zset 实现延迟消息**
+
+
+
+虽然基于 Redis 过期监听的方案并不完美，但是并不是 Redis 实现关单功能就不完美了，还有其他的方案。
+
+我们可以借助 Redis 中的有序集合 —— zset 来实现这个功能。
+
+zset 是一个有序集合，每一个元素(member)都关联了一个 score，可以通过 score 排序来取集合中的值。
+
+我们将订单超时时间的时间戳（下单时间 + 超时时长）与订单号分别设置为 score 和 member。这样 redis 会对 zset 按照 score 延时时间进行排序。然后我们再开启redis扫描任务，获取”当前时间 > score”的延时任务，扫描到之后取出订单号，然后查询到订单进行关单操作即可。
+
+使用 redis zset 来实现订单关闭的功能的优点是可以借助 redis 的持久化、高可用机制。避免数据丢失。但是这个方案也有缺点，那就是在高并发场景中，有可能有多个消费者同时获取到同一个订单号，一般采用加分布式锁解决，但是这样做也会降低吞吐型。
+
+但是，在大多数业务场景下，如果幂等性做得好的，多个消费者取到同一个订单号也无妨。
+
+
+
+**Redission 实现延迟消息**
+
+
+
+上面这种方案看上去还不错，但是需要我们自己基于 zset 这种数据结构编写代码，那么有没有什么更加友好的方式？
+
+有的，那就是基于 Redisson。
+
+Redisson 是一个在 Redis 的基础上实现的框架，它不仅提供了一系列的分布式的 Java 常用对象，还提供了许多分布式服务。
+
+Redission 中定义了分布式延迟队列 RDelayedQueue，这是一种基于我们前面介绍过的 zset 结构实现的延时队列，它允许以指定的延迟时长将元素放到目标队列中。
+
+其实就是在 zset 的基础上增加了一个基于内存的延迟队列。当我们要添加一个数据到延迟队列的时候， redission 会把数据 + 超时时间放到 zset 中，并且起一个延时任务，当任务到期的时候，再去 zset 中把数据取出来，返回给客户端使用。
+
+大致思路就是这样的，感兴趣的大家可以看一看 RDelayedQueue 的具体实现。
+
+基于 Redisson 的实现方式，是可以解决基于 zset 方案中的并发重复问题的，而且还能实现方式也比较简单，稳定性、性能都比较高。
 
 #### Redis 如何实现发布/订阅？
 
+Redis 发布订阅 (pub/sub) 是一种消息通信模式：发送者 (pub) 发送消息，订阅者 (sub) 接收消息。
+
+（在 Stream 推出之后，越来越多人会采用 Stream 来实现这样的功能了。）
+
+即在 Redis 中定义频道，客户端可以订阅一个或多个频道并接收它们所发布的消息。发布者向一个或多个频道发布消息，所有订阅该频道的客户端都会收到该消息。
+
+![Redis发布订阅](./images/Redis发布订阅.png)
+
+Redis 的发布/订阅模式一般用于实时消息传递和事件驱动的应用程序中，例如：
+
+1. **即时通讯：**发布/订阅模式可以用于实现即时消息传递应用程序，例如聊天室或社交媒体应用程序。订阅者可以订阅特定频道以接收他们感兴趣的消息，并能够实时更新。
+2. **日志处理：**发布/订阅模式可以用于日志处理应用程序，例如日志聚合或日志监控系统。订阅者可以订阅特定频道以接收他们感兴趣的日志消息，例如错误或异常消息，并能够实时更新。
+3. **实时数据更新：**发布/订阅模式可以用于实时数据更新应用程序，例如股票市场或在线游戏。订阅者可以订阅特定频道以接收他们感兴趣的实时数据更新，并能够实时更新。
+4. **缓存刷新：**发布/订阅模式可以用于缓存刷新应用程序，例如缓存的数据过期时自动更新。当数据被更新时，发布者将消息发布到特定频道，订阅者将接收到消息并更新其本地缓存。
+
+> Redis 的发布/订阅模式有以下优点和缺点：
+>
+> 优点：
+>
+> 1. 实时性高：发布/订阅模式可以实现实时消息传递，能够提高应用程序的实时性和响应速度。
+> 2. 灵活性高：发布/订阅模式可以根据需要订阅特定频道，订阅者只会接收他们感兴趣的消息，从而提高了灵活性。
+> 3. 可扩展性高：发布/订阅模式能够支持多个订阅者同时订阅特定频道，从而提高了可扩展性。
+>
+> 缺点：
+>
+> 1. 可靠性低：发布/订阅模式是一种异步通信方式，发布者不会等待订阅者接收到消息，因此消息的可靠性可能会受到影响。
+> 2. 可靠性难以保证：发布/订阅模式在传输过程中可能会出现消息丢失的情况，尤其是在高负载情况下。
+> 3. 不适合高频次的请求：在高频次的请求场景下，发布/订阅模式可能会对性能造成影响，因为每个订阅者都需要对每个发布的消息进行处理。
+
+具体的实现过程如下：
+
+1、创建并发布消息到一个 Redis 频道：
+
+```bash
+redis-cli> PUBLISH channel1 "Hello, world!"
+```
+
+2、客户端订阅渠道的消息
+
+```bash
+redis-cli> SUBSCRIBE channel1
+```
+
+订阅后，客户端将一直保持订阅状态，直到手动取消订阅或者连接断开。
+
+可以通过在不同的客户端上运行相同的订阅命令来实现多个订阅者，它们都会接收到频道中发布的消息。
+
+**Redis 发布/订阅模式是异步的**，即发布者不会等待订阅者接收到消息。此外，Redis 还提供了许多其他功能，例如模式匹配和非阻塞订阅等。
+
 #### 除了做缓存，Redis 还能用来干什么？
+
+Redis 最主要的功能就是拿来做缓存，来提升系统的性能，但是除了做缓存以外，他还能做很多事（但是，能做并不代表就适合，并不代表就一定要用它）：
+
+1. **消息队列（不建议）：**Redis 支持发布/订阅模式和 Stream，可以作为轻量级消息队列使用，用于异步处理任务或处理高并发请求。
+2. **延迟消息（不建议）：**Redis 的 ZSET 可以用来实现延迟消息，也可以基于 Key 的过期消息实现延迟消息，还可以借助 Redisson 的 RDelayQueue 来实现延迟消息，都是可以的。
+3. **排行榜（建议）：**利用 Redis 的有序集合和列表结构，可以成为设计实时排行榜的绝佳选择，例如各类热门排行榜、热门商品列表等。
+4. **计数器（建议）：**基于 Redis 可以实现一些计数器的功能，比如网站的访问量、朋友圈点赞等。通过  incr 命令就能实现原子性的自增操作，从而实现一个全局计数器。·
+5. **分布式 ID（可以）：**因为他有全局自增计数的功能，所以在分布式场景，我们也可以利用 Redis 来实现一个分布式ID来保障全局的唯一且自增。
+6. **分布式锁（建议）：**Redis 的单线程特性可以保证多个客户端之间对同一把锁的操作是原子性的，可以轻松实现分布式锁，用于控制多个进程对共享资源的访问。
+7. **地理位置应用（建议）：**Redis 支持 GEO，支持地理位置定位和查询，可以存储地理位置信息并通过 Redis 的查询功能获取附近的位置信息。比如"附近的人"用它来实现就非常方便。
+8. **分布式限流（可以）：**Redis 提供了令牌桶和漏桶算法的实现，可以用于实现分布式限流。
+9. **分布式 Session（建议）：**可以使用 Redis 实现分布式 Session 管理，保证多台服务器之间用户的会话状态同步。
+10. **布隆过滤器（建议）：**Redis 提供了布隆过滤器（Bloom Filter）数据结构的实现，可以高效地检测一个元素是否存在于一个集合中
+11. **状态统计（数据量大建议用）：**Redis 中支持 BitMap 这种数据结构，它不仅查询和存储高效，更能节省很多空间，所以我们可以借助他做状态统计，比如记录亿级用户的登录状态，或者是那他来做签到统计也比较常见。
+12. **共同关注（建议）：**Redis 中支持 Set 集合类型，这个类型非常适合我们做一些取并集、交集、差集等，基于这个特性，我们就能去交集的方式非常方便的实现共同好友、或者共同关注的功能。
+13. **推荐关注（可以）：**和上面的共同关注类似，交集实现共同好友，那么并集或者差集就能实现推荐关注的功能。
 
 #### 对于 Redis 的操作，有哪些推荐的 Best Practices？
 
+1. 避免使用 KEYS 命令获取所有 key，因为该命令会遍历所有 key，可能会阻塞 Redis 的主线程。
+2. 避免使用 FLUSHALL 或 FLUSHDB 命令清空 Redis 数据库，因为这会清空所有数据库中的数据，而不仅仅是当前数据库。
+3. 避免在 Redis 中存储大的数据块，因为这会导致 Redis 实例内存占用过高，影响 Redis 的性能。
+4. 合理设置过期时间，避免过期时间设置过短或过长，导致 Redis 实例内存占用过高或数据过期失效时间不准确。
+5. 对于写入操作频繁的数据，考虑使用 Redis 的持久化机制进行数据持久化，以保证数据的可靠性。
+6. 避免使用 Lua 脚本中的无限循环，因为这会导致 Redis 的主线程被阻塞。
+7. 对于需要频繁更新的数据，可以使用 Redis 的 Hash 数据结构，以减少 Redis 实例的内存占用和网络传输数据量。因为 Hash 可以做部分更新。
+8. 避免在 Redis 实例上运行复杂的计算逻辑，因为这会导致 Redis 的主线程被阻塞，影响 Redis 的性能。
+9. 对于需要高可用的 Redis 实例，可以使用 Redis Sentinel 或 Redis Cluster 进行搭建，以实现 Redis 的高可用性。
+10. 对于需要高并发的场景，可以使用 Redis 的分布式锁机制，以避免并发访问数据的冲突。
+
 #### 如何用 SETNX 实现分布式锁？
 
-#### 什么是 RedLock，他解决了什么问题？
+利用 Redis 的单线程特性，在多个 Redis 客户端同时通过 SETNX 命令尝试获取锁，如果返回 1 表示获取锁成功，否则表示获取锁失败。
+
+> Redis Setnx（SET if Not eXists） 命令在指定的 key 不存在时，为 key 设置指定的值。设置成功，返回 1 。 设置失败，返回 0 。
+
+因为 Redis 的单线程机制，所以可以保证只会有一个客户端成功获取到锁，而其他客户端则会失败。如果获取锁成功，则设置一个过期时间，防止该客户端挂了之后一直持有该锁。客户端释放锁的时候，需要先判断该锁是否仍然属于该客户端，如果是，则通过 DEL 命令释放锁。
+
+```java
+public class RedisDistributedLock {
+    private final JedisPool jedisPool;
+
+    public RedisDistributedLock(JedisPool jedisPool) {
+        this.jedisPool = jedisPool;
+    }
+
+    public boolean tryLock(String lockKey, String requestId, int expireTime) {
+        try (Jedis jedis = jedisPool.getResource()) {
+            String result = jedis.set(lockKey, requestId, "NX", "PX", expireTime);
+            return "OK".equals(result);
+        }
+    }
+
+    public boolean unlock(String lockKey, String requestId) {
+        try (Jedis jedis = jedisPool.getResource()) {
+            String script = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
+            Object result = jedis.eval(script, Collections.singletonList(lockKey), Collections.singletonList(requestId));
+            return Long.parseLong(result.toString()) == 1L;
+        }
+    }
+}
+```
+
+tryLock 方法接收三个参数，分别是锁的键值 lockKey、加锁的请求标识 requestId 和锁的过期时间 expireTime。该方法会尝试使用Redis的set命令加锁，如果加锁成功则返回 true，否则返回 false。其中 NX 表示只在锁的键不存在时设置锁，PX 表示锁的过期时间为 expireTim e毫秒。
+
+> SETNX 命令自身是不支持设置超时时间的，一般是结合 EXPIRE 一起使用，常见用法：
+>
+> SETNX key value
+> EXPIRE key 10
+>
+> 或者:
+>
+> SET key value EX 10 NX
+
+unlock 方法接收两个参数，分别是锁的键值 lockKey 和加锁的请求标识 requestId。该方法会执行一个 Lua 脚本，判断当前锁的值是否等于请求标识 requestId，如果是则删除锁并返回 true，否则返回 false。该方法使用 eval 命令执行 Lua 脚本，传入锁的键值和请求标识两个参数，返回值是执行结果。
+
+
+
+**优点**
+（1）实现简单：SETNX 命令实现简单，易于理解和使用。
+（2）性能较高：由于 SETNX 命令的执行原子性，保证了分布式锁的正确性，而且在 Redis 中，SETNX 命令是单线程执行的，所以性能较高。
+
+
+
+**缺点**
+（1）锁无法续期：如果加锁方在加锁后的执行时间较长，而锁的超时时间设置的较短，可能导致锁被误释放。
+（2）无法避免死锁：如果加锁方在加锁后未能及时解锁（也未设置超时时间），且该客户端崩溃，可能导致死锁。
+（3）存在竞争：由于 SETNX 命令是对 Key 的操作，所以在高并发情况下，多个客户端之间仍可能存在竞争，从而影响性能。
+（4）setnx 不支持可重入，可以借助 redission 封装的能力实现可重入锁。
 
 #### 如何用 Redisson 实现分布式锁？
 
+在使用 SETNX 实现的分布式锁中，因为存在锁无法续期导致并发冲突的问题，所以在真实的生产环境中用的并不是很多，其实，真正在使用 Redis 时，用的比较多的是基于 Redisson 实现分布式锁。
+
+> Redisson 是一个基于 Redis 的 Java 客户端，它提供了丰富的功能，包括分布式锁的支持。 https://redisson.org/
+> 关于 Redisson 实现分布式锁可以查看：https://github.com/redisson/redisson/wiki/8.-Distributed-locks-and-synchronizers
+
+为了避免锁超时，Redisson 中引入了看门狗的机制，他可以帮助我们在 Redisson 实例被关闭前，不断的延长锁的有效期。
+
+> 默认情况下，看门狗的检查锁的超时时间是30秒钟，也可以通过修改 Config.lockWatchdogTimeout 来另行指定。
+
+#### 什么是 RedLock，他解决了什么问题？
+
+RedLock 是 Redis 的作者提出的一个多节点分布式锁算法，旨在解决使用单节点 Redis 分布式锁可能存在的单点故障问题。
+
+Redis 的单点故障问题：
+
+1、在使用单节点 Redis实现分布式锁时，如果这个 Redis 实例挂掉，那么所有使用这个实例的客户端都会出现无法获取锁的情况。
+
+2、当使用集群模式部署的时候，如果 master 一个客户端在 master 节点加锁成功了，然后没来得及同步数据到其他节点上，他就挂了， 那么这时候如果选出一个新的节点，再有客户端来加锁的时候，就也能加锁成功，因为数据没来得及同步，新的 master 会认为这个 key 是不存在的。
+
+> RedLock 通过使用多个 Redis 节点，来提供一个更加健壮的分布式锁解决方案，能够在某些 Redis 节点故障的情况下，仍然能够保证分布式锁的可用性。
+>
+> 在进行加锁操作时，RedLock 会向每个 Redis 节点发送相同的命令请求，每个节点都会去竞争锁，如果至少在大多数节点上成功获取了锁，那么就认为加锁成功。反之，如果大多数节点上没有成功获取锁，则加锁失败。这样就可以避免因为某个 Redis 节点故障导致加锁失败的情况发生。
+
+![RedLock](./images/RedLock.png)
+
+在 redis 集群中有 3 个节点的情况下：
+
+1、客户端想要获取锁时，会生成一个全局唯一的 ID（官方文档建议使用系统时间来生成这个ID）
+2、客户端尝试使用这个 ID 获取所有redis节点的同意，这一步通过使用SETNX命令实现。
+3、如果有 2 个以上的节点同意，那么锁就被成功设置了。
+4、获取锁之后，用户可以执行想要的操作。
+5、最后，不想用这把锁的时候，再尝试依次解锁，无论锁是否成功获取。
+
+这样，当超过半数以上的节点都写入成功之后，即使 master 挂了，新选出来的 master 也能保证刚刚的那个 key 一定存在（否则这个节点就不会被选为master）。
+
+需要注意的是，RedLock 并不能完全解决分布式锁的问题。例如，在脑裂的情况下，RedLock 可能会产生两个客户端同时持有锁的情况。
+
 #### 为什么 ZSet 既能支持高效的范围查询，还能以 O(1) 复杂度获取元素权重值？
+
+Sorted Set 能支持范围查询，这是因为它的核心数据结构设计采用了跳表，而它又能O(1)的复杂度获取元素权重，这是因为它同时采用了哈希表进行索引。
+
+```c++
+typedef struct zset 
+{ 
+    dict *dict; 
+    zskiplist *zsl;
+} zset;
+```
+
+以上是 zset 的数据结构，其中包含了两个成员，分别是哈希表 dict 和跳表 zsl。
+
+dict 存储 member->score 之间的映射关系，所以  ZSCORE 的时间复杂度为 O(1)。skiplist 是一个「有序链表 + 多层索引」的结构，查询元素的复杂度是 O(logN)，所以他的查询效率很高。
 
 #### Redisson 的 watch dog 机制是怎么样的？
 
-#### 什么是 Redis 的渐进式 rehash
+为了避免 Redis 实现的分布式锁超时，Redisson中引入了watch dog 的机制，他可以帮助我们在 Redisson 实例被关闭前，不断的延长锁的有效期。
 
-#### Redis 中 key 过期了一定会立即删除吗?
+**自动续租：**当一个 Redisson 客户端实例获取到一个分布式锁时，如果没有指定锁的超时时间， Watchdog 会基于 Netty 的时间轮启动一个后台任务，定期向 Redis 发送命令，重新设置锁的过期时间，通常是锁的租约时间的 1/3。这确保了即使客户端处理时间较长，所持有的锁也不会过期。
+**续期时长：**默认情况下，每 10s 钟做一次续期，续期时长是 30s。
+**停止续期：**当锁被释放或者客户端实例被关闭时，Watchdog 会自动停止对应锁的续租任务。
 
-#### Redis 中有一批 key 瞬间过期，为什么其它 key 的读写效率会降低？
 
-#### 如何基于 Redis 实现滑动窗口限流？
 
-#### 如何基于 Redisson 实现一个延迟队列
+**实现原理**
 
-#### 介绍下 Redis 集群的脑裂问题？
 
-#### 为什么需要延迟双删，两次删除的原因是什么？
 
-#### Redis 的 Key 和 Value 的设计原则有哪些？
+在 Redisson 中，watch dog 的主要实现在 scheduleExpirationRenewal 方法中：
 
-#### Redisson 和 Jedis 有啥区别？如何选择？
+```java
+protected void scheduleExpirationRenewal(long threadId) {
+    ExpirationEntry entry = new ExpirationEntry();
+    ExpirationEntry oldEntry = EXPIRATION_RENEWAL_MAP.putIfAbsent(getEntryName(), entry);
+    if (oldEntry != null) {
+        oldEntry.addThreadId(threadId);
+    } else {
+        entry.addThreadId(threadId);
+        try {
+            renewExpiration();
+        } finally {
+            if (Thread.currentThread().isInterrupted()) {
+                cancelExpirationRenewal(threadId);
+            }
+        }
+    }
+}
 
-#### 什么是 Redis 的 Pipeline，和事务有什么区别？
+//定时任务执行续期
+private void renewExpiration() {
+    ExpirationEntry ee = EXPIRATION_RENEWAL_MAP.get(getEntryName());
+    if (ee == null) {
+        return;
+    }
+    
+    Timeout task = getServiceManager().newTimeout(new TimerTask() {
+        @Override
+        public void run(Timeout timeout) throws Exception {
+            ExpirationEntry ent = EXPIRATION_RENEWAL_MAP.get(getEntryName());
+            if (ent == null) {
+                return;
+            }
+            Long threadId = ent.getFirstThreadId();
+            if (threadId == null) {
+                return;
+            }
+            
+            CompletionStage<Boolean> future = renewExpirationAsync(threadId);
+            future.whenComplete((res, e) -> {
+                if (e != null) {
+                    log.error("Can't update lock {} expiration", getRawName(), e);
+                    EXPIRATION_RENEWAL_MAP.remove(getEntryName());
+                    return;
+                }
+                
+                if (res) {
+                    // reschedule itself
+                    renewExpiration();
+                } else {
+                    cancelExpirationRenewal(null);
+                }
+            });
+        }
+    }, internalLockLeaseTime / 3, TimeUnit.MILLISECONDS);
+    
+    ee.setTimeout(task);
+}
 
-#### Redis 的事务和 Lua 之间有哪些区别？
 
-#### Redisson 的 lock 和 tryLock 有什么区别？
+//使用LUA脚本，进行续期
+protected CompletionStage<Boolean> renewExpirationAsync(long threadId) {
+    return evalWriteAsync(getRawName(), LongCodec.INSTANCE, RedisCommands.EVAL_BOOLEAN,
+            "if (redis.call('hexists', KEYS[1], ARGV[2]) == 1) then " +
+                    "redis.call('pexpire', KEYS[1], ARGV[1]); " +
+                    "return 1; " +
+                    "end; " +
+                    "return 0;",
+            Collections.singletonList(getRawName()),
+            internalLockLeaseTime, getLockName(threadId));
+}
+```
 
-#### 为什么 Redis 不支持回滚？
+可以看到，上面的代码的主要逻辑就是用了一个 TimerTask 来实现了一个定时任务，设置了`internalLockLeaseTime / 3` 的时长进行一次锁续期。默认的超时时长是 30s，那么他会每 10s 进行一次续期，通过LUA脚本进行续期，再续 30s
 
-#### 如何用 Redis 实现乐观锁？
+不过，这个续期也不是无脑续，他也是有条件的，其中`ExpirationEntry ent = EXPIRATION_RENEWAL_MAP.get(getEntryName());`这个值得我们关注，他会从 `EXPIRATION_RENEWAL_MAP` 中尝试获取一个KV对，如果查不到，就不续期了。
+
+`EXPIRATION_RENEWAL_MAP` 这个东西，会在 `unlock` 的时候操作的，对他进行 `remove`，所以一个锁如果被解了，那么就不会再继续续期了：
+
+```java
+@Override
+public void unlock() {
+    try {
+        get(unlockAsync(Thread.currentThread().getId()));
+    } catch (RedisException e) {
+        if (e.getCause() instanceof IllegalMonitorStateException) {
+            throw (IllegalMonitorStateException) e.getCause();
+        } else {
+            throw e;
+        }
+    }
+}
+
+@Override
+public RFuture<Void> unlockAsync(long threadId) {
+    return getServiceManager().execute(() -> unlockAsync0(threadId));
+}
+
+private RFuture<Void> unlockAsync0(long threadId) {
+    CompletionStage<Boolean> future = unlockInnerAsync(threadId);
+    CompletionStage<Void> f = future.handle((opStatus, e) -> {
+        cancelExpirationRenewal(threadId);
+
+        if (e != null) {
+            if (e instanceof CompletionException) {
+                throw (CompletionException) e;
+            }
+            throw new CompletionException(e);
+        }
+        if (opStatus == null) {
+            IllegalMonitorStateException cause = new IllegalMonitorStateException("attempt to unlock lock, not locked by current thread by node id: "
+                    + id + " thread-id: " + threadId);
+            throw new CompletionException(cause);
+        }
+
+        return null;
+    });
+
+    return new CompletableFutureWrapper<>(f);
+}
+
+protected void cancelExpirationRenewal(Long threadId) {
+    ExpirationEntry task = EXPIRATION_RENEWAL_MAP.get(getEntryName());
+    if (task == null) {
+        return;
+    }
+    
+    if (threadId != null) {
+        task.removeThreadId(threadId);
+    }
+
+    if (threadId == null || task.hasNoThreads()) {
+        Timeout timeout = task.getTimeout();
+        if (timeout != null) {
+            timeout.cancel();
+        }
+        EXPIRATION_RENEWAL_MAP.remove(getEntryName());
+    }
+}
+```
+
+以上代码，第 4 行 -> 16行 -> 22行 -> 57行。就是一次 unlock 过程中，对 EXPIRATION_RENEWAL_MAP 进行移除，进而取消下一次锁续期的实现细节。
+
+并且在 unlockAsync 方法中，不管 unlockInnerAsync 是否执行成功，还是抛了异常，都不影响 cancelExpirationRenewal 的执行，也可以理解为，只要 unlock 方法被调用了，即使解锁未成功，那么也可以停止下一次的锁续期。
+
+
+
+**什么情况会进行续期**
+
+
+
+当我们使用 Redisson 创建一个分布式锁的时候，并不是所有情况都会续期的，我们可以看下以下加锁过程的代码实现：
+
+```java
+private RFuture<Long> tryAcquireAsync(long waitTime, long leaseTime, TimeUnit unit, long threadId) {
+    RFuture<Long> ttlRemainingFuture;
+    if (leaseTime > 0) {
+        ttlRemainingFuture = tryLockInnerAsync(waitTime, leaseTime, unit, threadId, RedisCommands.EVAL_LONG);
+    } else {
+        ttlRemainingFuture = tryLockInnerAsync(waitTime, internalLockLeaseTime,
+                TimeUnit.MILLISECONDS, threadId, RedisCommands.EVAL_LONG);
+    }
+    CompletionStage<Long> s = handleNoSync(threadId, ttlRemainingFuture);
+    ttlRemainingFuture = new CompletableFutureWrapper<>(s);
+
+    CompletionStage<Long> f = ttlRemainingFuture.thenApply(ttlRemaining -> {
+        // lock acquired
+        if (ttlRemaining == null) {
+            if (leaseTime > 0) {
+                internalLockLeaseTime = unit.toMillis(leaseTime);
+            } else {
+                scheduleExpirationRenewal(threadId);
+            }
+        }
+        return ttlRemaining;
+    });
+    return new CompletableFutureWrapper<>(f);
+}
+```
+
+注意看第 15-19 行，只有当 `leaseTime <= 0` 的时候，Redisson 才会进行续期，所以，当我们加锁时，如果指定了超时时间，那么是不会被续期的。
+
+
+
+**什么情况会停止续期**
+
+
+
+首先，就是我们上面讲过的那种，如果一个锁的unlock方法被调用了，那么就会停止续期。
+
+那么，取消续期的核心代码如下：
+
+```java
+protected void cancelExpirationRenewal(Long threadId) {
+    ExpirationEntry task = EXPIRATION_RENEWAL_MAP.get(getEntryName());
+    if (task == null) {
+        return;
+    }
+    
+    if (threadId != null) {
+        task.removeThreadId(threadId);
+    }
+
+    if (threadId == null || task.hasNoThreads()) {
+        Timeout timeout = task.getTimeout();
+        if (timeout != null) {
+            timeout.cancel();
+        }
+        EXPIRATION_RENEWAL_MAP.remove(getEntryName());
+    }
+}
+```
+
+主要就是通过 `EXPIRATION_RENEWAL_MAP.remove`来做的。那么 `cancelExpirationRenewal` 还有下面一处调用：
+
+```java
+protected void scheduleExpirationRenewal(long threadId) {
+    ExpirationEntry entry = new ExpirationEntry();
+    ExpirationEntry oldEntry = EXPIRATION_RENEWAL_MAP.putIfAbsent(getEntryName(), entry);
+    if (oldEntry != null) {
+        oldEntry.addThreadId(threadId);
+    } else {
+        entry.addThreadId(threadId);
+        try {
+            renewExpiration();
+        } finally {
+            if (Thread.currentThread().isInterrupted()) {
+                cancelExpirationRenewal(threadId);
+            }
+        }
+    }
+}
+```
+
+也就是说，在尝试开启续期的过程中，如果线程被中断了，那么就会取消续期动作了。
+
+目前，Redisson 是没有针对最大续期次数和最大续期时间的支持的。所以，正常情况下，如果没有解锁，是会一直续期下去的。
+
+但是需要注意的是，Redisson 的续期是 Netty 的时间轮（TimerTask、Timeout、Timer）的，并且操作都是基于 JVM 的，所以，当应用宕机、下线或者重启后，续期任务就没有了。这样也能在一定程度上避免机器挂了但是锁一直不释放导致的死锁问题。
 
 #### watch dog 一直续期，那客户端挂了怎么办？
 
-#### 如何用 setnx 实现一个可重入锁？
+> 一直续期，别人不是拿不到锁了吗？
 
-#### Redis 实现分布锁的时候，哪些问题需要考虑？
+下面这几个你一定知道答案：
 
-#### Redis 如何高效安全的遍历所有 key ?
+分布式锁的目的是什么？防止并发。
+
+锁续期的条件是什么？还没解锁。
+
+什么情况下会没解锁？任务没执行完。
+
+那么，如果一个任务没执行完，我就一直给他续期，让他不断地延长锁时长，防止并发，有毛病吗？没有啊！
+
+如果你就是不想一直续期，那你就自己指定一个超时时间就行了。就不要用他的续期机制就好了。
+
+> 一旦客户端挂了但是锁还没释放怎么办？
+
+如果，应用集群中的一台机器，拿到了分布式锁，但是在执行的过程中，他挂了，还没来得及把锁释放，那么会有问题么？
+
+因为我们知道，锁的续期是 Redisson 实现的，而 Redisson 的后台任务是基于 JVM 运行的，也就是说，如果这台机器挂了，那么 Redisson 的后台任务也就没办法继续执行了。
+
+那么他也就不会会再继续续期了，那么到了期限之后，锁就会自动解除了。这样就可以避免因为一个实例宕机导致分布式锁的不可用。
 
 #### watch dog 解锁失败，会不会导致一直续期下去？
 
+不会的，因为在解锁过程中，不管是解锁失败了，还是解锁时抛了异常，都还是会把本地的续期任务停止，避免下次续期。
+
+```java
+@Override
+public void unlock() {
+    try {
+        get(unlockAsync(Thread.currentThread().getId()));
+    } catch (RedisException e) {
+        if (e.getCause() instanceof IllegalMonitorStateException) {
+            throw (IllegalMonitorStateException) e.getCause();
+        } else {
+            throw e;
+        }
+    }
+}
+```
+
+这是 redisson 中解锁方法的入口，这里调用了 unlockAsync 方法，传入了当前线程的 ID
+
+```java
+@Override
+public RFuture<Void> unlockAsync(long threadId) {
+    return getServiceManager().execute(() -> unlockAsync0(threadId));
+}
+
+private RFuture<Void> unlockAsync0(long threadId) {
+    CompletionStage<Boolean> future = unlockInnerAsync(threadId);
+    CompletionStage<Void> f = future.handle((opStatus, e) -> {
+        cancelExpirationRenewal(threadId);
+
+        if (e != null) {
+            if (e instanceof CompletionException) {
+                throw (CompletionException) e;
+            }
+            throw new CompletionException(e);
+        }
+        if (opStatus == null) {
+            IllegalMonitorStateException cause = new IllegalMonitorStateException("attempt to unlock lock, not locked by current thread by node id: "
+                    + id + " thread-id: " + threadId);
+            throw new CompletionException(cause);
+        }
+
+        return null;
+    });
+
+    return new CompletableFutureWrapper<>(f);
+}
+```
+
+这里就是 unlock 的核心逻辑了。主要看两个关键步骤：
+
+```java
+CompletionStage<Boolean> future = unlockInnerAsync(threadId);
+CompletionStage<Void> f = future.handle((opStatus, e) -> {
+});
+```
+
+第一步是执行解锁的动作，第二部是执行解锁后的操作。注意看，这里用到了一个 CompletionStage，并且通过 handle 方法进行了后续的操作。
+
+> CompletionStage 是 Java 8 引入的一个接口，位于 java.util.concurrent 包中。它代表了一个异步操作的阶段，这个阶段在某个任务的计算完成时会执行。CompletionStage 提供了一种非阻塞的方式来处理一系列的异步操作步骤。每一个操作步骤都可以以 CompletionStage 的形式表示，这些步骤可以串行执行，也可以并行执行或者应用某种组合。通过这种方式，CompletionStage 提供了强大的异步编程模型，允许开发者以链式调用的方式来组织复杂的异步逻辑。（他其实是CompletableFuture的父类）
+
+CompletionStage 的 handle 方法提供了一种机制来处理前一个阶段的结果或异常，无论该阶段是正常完成还是异常完成。他的方法签名如下：
+
+```java
+<T> CompletionStage<T> handle(BiFunction<? super T, Throwable, ? extends T> fn);
+```
+
+handle 方法接收一个 BiFunction，这个函数有两个参数：计算的结果（如果计算成功完成）和抛出的异常（如果计算失败）。这使得 handle 方法可以在一个地方同时处理操作的成功和失败情况。
+
+- 如果前一个阶段成功完成，handle 方法中的函数将被调用，其中的异常参数（Throwable）将为 null，而结果参数将携带操作的结果。
+- 如果前一个阶段失败或抛出异常，handle 方法同样会被调用，但这次结果参数将为 null，而异常参数将携带相应的异常信息。
+
+那么也就是说，CompletionStage 的 handle 方法允许你在前一个操作无论是成功完成、失败，还是抛出异常的情况下，都能够执行 handle 方法中定义的逻辑。
+
+所以，不管上面的 unlockInnerAsync 过程中，解锁是否成功，是否因为网络原因等出现了异常，后续的代码都能正常执行。那后续的代码是什么呢？
+
+```java
+CompletionStage<Void> f = future.handle((opStatus, e) -> {
+    cancelExpirationRenewal(threadId);
+
+    if (e != null) {
+        if (e instanceof CompletionException) {
+            throw (CompletionException) e;
+        }
+        throw new CompletionException(e);
+    }
+    if (opStatus == null) {
+        IllegalMonitorStateException cause = new IllegalMonitorStateException("attempt to unlock lock, not locked by current thread by node id: "
+                + id + " thread-id: " + threadId);
+        throw new CompletionException(cause);
+    }
+
+    return null;
+});
+```
+
+这段代码一上来就调用了 cancelExpirationRenewal：
+
+```java
+protected void cancelExpirationRenewal(Long threadId) {
+    ExpirationEntry task = EXPIRATION_RENEWAL_MAP.get(getEntryName());
+    if (task == null) {
+        return;
+    }
+    
+    if (threadId != null) {
+        task.removeThreadId(threadId);
+    }
+
+    if (threadId == null || task.hasNoThreads()) {
+        Timeout timeout = task.getTimeout();
+        if (timeout != null) {
+            timeout.cancel();
+        }
+        EXPIRATION_RENEWAL_MAP.remove(getEntryName());
+    }
+}
+```
+
+逻辑挺简单的，就是从 `EXPIRATION_RENEWAL_MAP` 中把当前线程移除掉。
+
+续期是需要依赖 EXPIRATION_RENEWAL_MAP 的，如果某个线程不在 EXPIRATION_RENEWAL_MAP 里面了，就不会再被续期了。
+
+所以，如果解锁过程中失败了，redisson也能保证不会再被续期了。除非移除 EXPIRATION_RENEWAL_MAP 的这个动作也失败了，但是从本地的 map 中移除一个 key 失败的概率还是极低的。
+
+#### 什么是 Redis 的渐进式 rehash
+
+在 Redis 中，他的 hash 表结构随着数据量的增大可能会导致扩容，通常是将数组大小扩大为原来的两倍，而在扩容过程中，因为容量变化了，所以元素在新的 hash 表中所处的位置也会随之变化，这个变化过程就是通过 rehash 实现的。
+
+而随着 Redis 的 hash 表越来越大，rehash 的成本也会越来越高。Redis 中实现了一种渐进式 rehash 的方案，他可以在哈希表 rehash 操作时，分多个步骤逐渐完成的方式，这样不会因为要一次性把所有元素都完成迁移而导致 IO 升高，线程阻塞。这个特性使得 Redis 可以在继续提供读写服务的同时，逐步迁移数据到新的哈希表，而不会对性能造成明显的影响。
+
+在 Redis 中，他的 hash 结构其实底层是使用了两个全局哈希表的。我们把他们称之为哈希表 1 和哈希表 2。并且会维护一个 rehashindex ，初始值为-1，来记录当前 rehash 的下标位置。
+
+当我们开始向 hash 表中插入数据时，只使用哈希表 1，不断向其中添加数据。
+
+![Redis渐进式rehash-1](./images/Redis渐进式rehash-1.png)
+
+而随着数据逐渐增多，当元素个数和 hash 表中的数组长度一致时，就会触发 rehash 动作，这时候，会把哈希表 2 的容量扩大一倍。然后就开始进入 rehash 流程。
+
+![Redis渐进式rehash-2](./images/Redis渐进式rehash-2.png)
+
+在进入 rehash 过程中，不会立刻把哈希表 1 中的数据全部 rehash 到哈希表 2 中，而是在后续有新的增删改查操作时，会从头开始进行 rehash 动作。
+
+假如，我们现在要新增一个元素：
+
+![Redis渐进式rehash-3](./images/Redis渐进式rehash-3.png)
+
+那么就会从当前的 `hashindex`开始，把这个哈希表 1 的 `hashindex` 这个位置的桶中的数据全部 `rehash` 到哈希表2中，然后 `rehashindex +1` 。
+
+然后再在哈希表 2 中进行添加操作：
+
+![Redis渐进式rehash-4](./images/Redis渐进式rehash-4.png)
+
+在后续的其他操作中也一样，会沿着 hashindex 一直往后开始进行逐个桶的 rehash，一直到哈希表1中的元素全部完成 rehash。
+
+然后再把哈希表 1 和哈希表 2 的指针互换一下（后续会再把哈希表 2 给直接置为 NULL），后续的增删改查继续在新的哈希表 1 中操作，直到下一次 rehash 开始。
+
+
+
+**查询怎么办**
+
+
+
+在 Rehash 开始时，Redis 会创建一个新的哈希表（称为哈希表2），而旧的哈希表（称为哈希表1）仍然保留。这时，Redis 同时维护这两个哈希表。
+
+当执行查询操作时，Redis 首先会在哈希表 1 中查找键。如果在哈希表 1 中没找到，Redis 会接着在哈希表2中查找。这确保了即使在 Rehash 过程中，所有的键都是可查询的。
+
+当哈希表1中的所有数据都迁移到哈希表 2 后，Rehash 操作完成。此时，哈希表 1 会被释放，哈希表 2 成为当前使用的哈希表。 查询就直接查询哈希表 2 即可
+
+#### Redis 中 key 过期了一定会立即删除吗?
+
+我们都知道，Redis 的 Key 是可以设置过期时间的，那么，过期了一定会立即删除吗？
+
+回答这个问题之前，我们先看下 Redis 是如何实现的 Key 的过期。
+
+
+
+也就是说Redis的键有两种过期方式：一种是被动过期，另一种是主动过期。
+被动过期指的是当某个客户端尝试访问一个键，发现该键已经超时，那么它会被从 Redis 中删除。
+
+当然，仅仅依靠被动过期还不够，因为有些过期的键可能永远不会再被访问。这些键应该被及时删除，因此Redis会定期随机检查一些带有过期时间的键。所有已经过期的键都会从键空间中删除。
+
+具体来说，Redis 每秒会执行以下操作 10 次：
+
+1. 从带有过期时间的键集合中随机选择 20 个键。
+2. 删除所有已经过期的键。
+3. 如果已经过期的键占比超过 25 %，则重新从步骤1开始。
+
+直到过期 Key 的比例下降到 25% 或者这次任务的执行耗时超过了25毫秒，才会退出循环
+
+所以，Redis 其实是并不保证 Key 在过期的时候就能被立即删除的。因为一方面惰性删除中需要下次访问才会删除，即使是主动删除，也是通过轮询的方式来实现的。如果要过期的 key 很多的话，就会带来延迟的情况。
+
+
+
+**主动删除 vs 被动删除**
+
+
+
+主动删除的优点：
+
+1. 及时释放内存：主动删除能够及时地释放过期键占用的内存，避免内存空间被长时间占用，从而降低了内存使用率。
+2. 避免写操作延迟：由于过期键被定期删除，不会导致过多的过期键在访问时触发删除操作，因此可以减少读写操作的延迟。
+
+主动删除的缺点：
+
+1. 增加系统开销：定期扫描和删除操作会增加系统的开销，特别是在有大量键需要处理时，可能会导致Redis的性能下降。
+
+被动删除的优点：
+
+1. 减少系统开销：被动删除不会定期地进行扫描和删除操作，因此可以减少系统的开销，节省计算资源。
+
+被动删除的缺点：
+
+1. 可能导致内存占用高：被动删除可能导致过期键长时间占用内存，直到被访问时才被删除，这可能会导致内存占用率较高。
+2. 可能导致访问延迟：当大量键同时过期并在访问时触发删除操作时，可能会导致读写操作的延迟。
+
+**Redis 的被动删除策略**，不需要额外配置。当你设置键的过期时间（TTL）时，Redis 会自动处理被动删除。
+
+要使用主动删除策略，需要在 Redis 配置文件中设置过期键检查的频率。你可以通过设置以下配置参数来调整主动删除的行为：
+
+- hz（每秒执行的定时器频率）：增加该值可以提高主动删除的频率。
+- maxmemory（Redis 的最大内存限制）：设置合适的最大内存限制，以确保 Redis 在内存不足时触发主动删除。
+
+例如，在 Redis 配置文件中可以设置：
+
+```properties
+maxmemory 1gb
+hz 10
+```
+
+#### Redis 中有一批 key 瞬间过期，为什么其它 key 的读写效率会降低？
+
+Redis 的键有两种过期方式：一种是被动过期，另一种是主动过期。
+
+主动过期会在定时的去删除 key，那么带来一个问题，那就是：Redis 中如果有一批 key 同时过期，会导致其它key的读写效率降低
+
+原因是因为 Redis 的主动过期定时任务也是在 Redis 的单线程模型中的主线程中执行的，也就是说如果出现了一批key同时过期，就需要删除大量的Key。那么因为命令执行是单线程的，所以这时候后面来的业务操作请求，就需要等这个删除命令执行完才可以处理业务请求。
+
+那么这时候就会出现，业务访问延时增大的问题。
+
+如何解决这个问题呢？有以下几个思路：
+
+使用随机过期时间：如果可能的话，可以将键的过期时间随机分布，而不是在同一时间点过期。这样可以分散过期键删除的压力，避免大规模的键同时过期。同时也能避免缓存雪崩的问题。
+
+使用被动删除：被动删除在每次访问的时候才会去删除 key，并不会定时删除，不太容易发生大量 key 同时被删除的情况。但是被动删除可能会导致内存占用比较多。
+
+#### 如何基于 Redis 实现滑动窗口限流？
+
+滑动窗口限流是一种流量控制策略，用于控制在一定时间内允许执行的操作数量或请求频率。它的工作方式类似于一个滑动时间窗口，在窗口内允许的操作数量是固定的，窗口会随着时间的推移不断滑动。
+
+滑动窗口限流的主要**优点是可以在时间内平滑地控制流量**，而不是简单地设置固定的请求数或速率。这使得系统可以更**灵活地应对突发流量或峰值流量**，而不会因为固定速率的限制而浪费资源或降低系统性能。
+
+利用 Redis，我们就可以实现一个简单的滑动窗口限流的功能。因为滑动窗口和时间有关，所以很容易能想到要基于时间进行统计。
+
+**那么我们只需要在每一次有请求进来的时候，记录下请求的时间戳和请求的数据，然后在统计窗口内请求的数量时，只需要统计窗口内的被记录的数据量有多少条就行了。**
+
+在 Redis 中，我们可以基于 ZSET 来实现这个功能。假如我们限定 login 接口一分钟只能调用 100 次：
+
+那么，我们就可以把 login 接口这个需要做限流的资源名作为 key 在 redis 中进行存储，然后 value 我们现在 ZSET 这种数据结构，把他的 score 设置为当前请求的时间戳，member 的话建议用请求的详情的 hash 进行存储（或者 UUID、MD5 什么的），避免在并发时，时间戳一致出现 scode 和 memberv 一样导致被 zadd 幂等的问题。
+
+![Redis-滑动窗口限流](./images/Redis-滑动窗口限流.png)
+
+所以，我们实现滑动窗口限流的主要思想是：**只保留在特定时间窗口内的请求记录，而丢弃窗口之外的记录**。
+
+主要步骤如下：
+
+1. 定义滑动窗口的时间范围，例如，窗口大小为 60 秒。
+2. 每次收到一个请求时，我们就定义出一个 zset 然后存储到 redis 中。
+3. 然后再通过 ZREMRANGEBYSCORE 命令来删除分值小于窗口起始时间戳（当前时间戳-60s）的数据。
+4. 最后，再使用 ZCARD 命令来获取有序集合中的成员数量，即在窗口内的请求量。
+
+```java
+import redis.clients.jedis.Jedis;
+
+public class SlidingWindowRateLimiter {
+    private Jedis jedis;
+    private String key;
+    private int limit;
+
+    public boolean allowRequest(String key) {
+        //当前时间戳
+        long currentTime = System.currentTimeMillis();
+        //窗口开始时间是当前时间减60s
+        long windowStart = currentTime - 60 * 1000;
+        //删除窗口开始时间之前的所有数据
+        jedis.zremrangeByScore(key, "-inf", String.valueOf(windowStart));
+        //计算总请求数
+        long currentRequests = jedis.zcard(key);
+    	//窗口足够则把当前请求加入
+        if (currentRequests < limit) {
+            jedis.zadd(key, currentTime, String.valueOf(currentTime));
+            return true;
+        }
+
+        return false;
+    }
+}
+```
+
+以上代码在高并发情况下，可能会存在原子性的问题，需要考虑加事务或者 lua 脚本：
+
+```java
+import redis.clients.jedis.Jedis;
+
+public class SlidingWindowRateLimiter {
+    private Jedis jedis;
+    private String key;
+    private int limit;
+
+    public SlidingWindowRateLimiter(Jedis jedis, String key, int limit) {
+        this.jedis = jedis;
+        this.key = key;
+        this.limit = limit;
+    }
+
+    public boolean allowRequest(String key) {
+        // 当前时间戳
+        long currentTime = System.currentTimeMillis();
+
+        // 使用Lua脚本来确保原子性操作
+        String luaScript = "local window_start = ARGV[1] - 60000\n" +
+                           "redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', window_start)\n" +
+                           "local current_requests = redis.call('ZCARD', KEYS[1])\n" +
+                           "if current_requests < tonumber(ARGV[2]) then\n" +
+                           "    redis.call('ZADD', KEYS[1], ARGV[1], ARGV[1])\n" +
+                           "    return 1\n" +
+                           "else\n" +
+                           "    return 0\n" +
+                           "end";
+
+        Object result = jedis.eval(luaScript, 1, key, String.valueOf(currentTime), String.valueOf(limit));
+        
+        return (Long) result == 1;
+    }
+}
+```
+
+
+
+**ZREMRANGEBYSCORE**
+
+Redis Zremrangebyscore 命令用于移除有序集中，指定分数（score）区间内的所有成员。
+
+redis Zremrangebyscore 命令基本语法如下：
+
+```bash
+ZREMRANGEBYSCORE key min max
+```
+
+而我们代码中使用的 '-inf' 在 redis 中表示负无穷。-inf 代表负无穷，+inf 代表正无穷。
+
+#### 如何基于 Redisson 实现一个延迟队列
+
+Redisson 中定义了分布式延迟队列 RDelayedQueue，这是一种基于我们前面介绍过的zset结构实现的延时队列，它允许以指定的延迟时长将元素放到目标队列中。
+
+其实就是在 zset 的基础上增加了一个基于内存的延迟队列。当我们要添加一个数据到延迟队列的时候， redisson 会把数据 + 超时时间放到 zset 中，并且起一个延时任务，当任务到期的时候，再去 zset 中把数据取出来，返回给客户端使用。
+
+```xml
+<dependency>
+    <groupId>org.redisson</groupId>
+    <artifactId>redisson</artifactId>
+    <version>最新版</version> 
+</dependency>
+```
+
+定义一个 Redisson 客户端：
+
+```java
+@Configuration
+public class RedissonConfig {
+    
+    @Bean(destroyMethod="shutdown")
+    public RedissonClient redisson() throws IOException {
+        Config config = new Config();
+		config.useSingleServer().setAddress("redis://127.0.0.1:6379");
+		RedissonClient redisson = Redisson.create(config);
+        return redisson;
+    }
+}
+```
+
+接下来，在想要使用延迟队列的地方做如下方式：
+
+```java
+import org.redisson.api.RBlockingDeque;
+import org.redisson.api.RDelayedQueue;
+import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.concurrent.TimeUnit;
+
+@Component
+public class RedissonOrderDelayQueue {
+
+
+
+    @Autowired
+    RedissonClient redisson;
+
+    public void addTaskToDelayQueue(String orderId) {
+      
+        RBlockingDeque<String> blockingDeque = redisson.getBlockingDeque("orderQueue");
+        RDelayedQueue<String> delayedQueue = redisson.getDelayedQueue(blockingDeque);
+
+        System.out.println(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) + "添加任务到延时队列里面");
+        delayedQueue.offer(orderId, 3, TimeUnit.SECONDS);
+        delayedQueue.offer(orderId, 6, TimeUnit.SECONDS);
+        delayedQueue.offer(orderId, 9, TimeUnit.SECONDS);
+    }
+
+
+   public String getOrderFromDelayQueue() {
+        RBlockingDeque<String> blockingDeque = redisson.getBlockingDeque("orderQueue");
+        RDelayedQueue<String> delayedQueue = redisson.getDelayedQueue(blockingDeque);
+        String orderId = blockingDeque.take();
+        return orderId;
+    }
+
+}
+```
+
+使用 offer 方法将两条延迟消息添加到 RDelayedQueue 中，使用 take 方法从 RQueue 中获取消息，如果没有消息可用，该方法会阻塞等待，直到消息到达。
+
+
+我们使用 RDelayedQueue 的 offer 方法将元素添加到延迟队列，并指定延迟的时间。当元素的延迟时间到达时，Redisson 会将元素从 RDelayedQueue 转移到关联的 RBlockingDeque 中。
+
+使用 RBlockingDeque 的 take 方法从关联的 RBlockingDeque 中获取元素。这是一个阻塞操作，如果没有元素可用，它会等待直到有元素可用。
+
+所以，为了从延迟队列中取出元素，使用 RBlockingDeque 的 take 方法，因为 Redisson 的 RDelayedQueue 实际上是通过转移元素到关联的 RBlockingDeque 来实现延迟队列的。
+
+#### 介绍下 Redis 集群的脑裂问题？
+
+所谓脑裂，就像他的名字一样，大脑裂开了，一般来说就是指一个分布式系统中有两个子集，然后每个子集都有一个自己的大脑(Leader/Master)。那么整个分布式系统中就会存在多个大脑了，而且每个自己都认为自己是正常的，从而导致数据不一致或重复写入等问题。
+
+
+
+**脑裂的发生**
+
+Redis 的脑裂问题可能发生在网络分区或者主节点出现问题的时候：
+
+- **网络分区：**网络故障或分区导致了不同子集之间的通信中断。
+  - Master节点，哨兵和 Slave 节点被分割为了两个网络，Master 处在一个网络中，Slave 库和哨兵在另外一个网络中，此时哨兵发现和 Master 连不上了，就会发起主从切换，选一个新的 Master，这时候就会出现两个主节点的情况。
+- **主节点问题：**集群中的主节点之间出现问题，导致不同的子集认为它们是正常的主节点。
+  - Master 节点有问题，哨兵就会开始选举新的主节点，但是在这个过程中，原来的那个 Master 节点又恢复了，这时候就可能会导致一部分 Slave 节点认为他是 Master 节点，而另一部分 Slave 新选出了一个 Master
+
+
+
+**脑裂的危害**
+
+脑裂问题可能导致以下问题：
+
+- 数据不一致：不同子集之间可能对同一数据进行不同的写入，导致数据不一致。
+- 重复写入：在脑裂解决后，不同子集可能尝试将相同的写入操作应用到主节点上，导致数据重复。
+- 数据丢失：新选出来的 Master 会向所有的实例发送 slave of 命令，让所有实例重新进行全量同步，而全量同步首先就会将实例上的数据先清空，所以在主从同步期间在原来那个 Master 上执行的命令将会被清空。
+
+
+
+**如何避免脑裂**
+
+那么如何防止脑裂的发生呢？
+
+Redis 已经提供了两个配置项可以帮我们做这个事儿，分别是 min-slaves-to-write 和 min-slaves-max-lag。
+
+min-slaves-to-write：主库能进行数据同步的最少从库数量；
+min-slaves-max-lag：主从库间进行数据复制时，从库给主库发送 ACK 消息的最大延迟秒数。
+
+这两个配置项必须同时满足，不然主节点拒绝写入。在期间满足min-slaves-to-write和min-slaves-max-lag的要求，那么主节点就会被禁止写入，脑裂造成的数据丢失情况自然也就解决了。
+
+举个例子：
+
+假设我们将 min-slaves-to-write 设置为 1，把 min-slaves-max-lag 设置为 10s。
+
+如果Master节点因为某些原因挂了 12s，导致哨兵判断主库客观下线，开始进行主从切换。
+
+同时，因为原 Master 宕机了 12s，没有一个（min-slaves-to-write）从库能和原主库在 10s（ min-slaves-max-lag） 内进行数据复制，这样一来，就因为不满足配置要求，原Master也就再也无法接收客户端请求了。
+
+这样一来，主从切换完成后，也只有新主库能接收请求，这样就没有脑裂的发生了。
+
+
+
+**能彻底解决脑裂吗？**
+
+还是刚刚那个场景，假设我们将 min-slaves-to-write 设置为 1，把 min-slaves-max-lag 设置为 10s，并且down-after-milliseconds时间为8s，也就是说，如果8秒连不上主节点，哨兵就会进行主从切换。
+
+但是，如果主从切换的过程需要5s时间的话，就会有问题。
+
+Master 节点宕机 8s 时，哨兵判断主节点客观下线，开始进行主从切换，但是这个过程一共需要 5s。那如果主从切换过程中，主节点有恢复运行，即第 9 秒 Master 恢复了，而 min-slaves-max-lag 设置为 10s 那么主节点还是可写的。
+
+那么就会导致 9s~12s 这期间如果有客户端写入原 Master 节点，那么这段时间的数据会等新的 Master 选出来之后，执行了 slaveof 之后导致丢失。
+
+Redis脑裂可以采用 min-slaves-to-write 和 min-slaves-max-lag 合理配置尽量规避，但无法彻底解决。
+
+#### Redis 的 Key 和 Value 的设计原则有哪些？
+
+在设计 Redis 的 Key 和 Value 时，需要考虑一些原则，以确保数据存储和检索的效率，以及满足特定用例的需求。以下是一些设计 Redis Key 和 Value 的原则：
+
+**Key 的设计原则**
+
+1. **可读性：**一个Key应该具有比较好的可读性，让人能看得懂是什么意思，而不是含糊不清。key 名称以 key 所代表的 value 类型结尾，以提高可读性。例如：user:basic.info:userid:string。
+2. **简洁性：**Key 应该保持简洁，避免过长的命名，以节省内存和提高性能。一个好的做法是使用短、有意义的 Key，但也不要过于简单以避免与其他 Key 冲突。
+3. **避免特殊字符：**避免在 Key 中使用特殊字符，以确保 Key 的可读性和可操作性。命名中尽量只包含：大小写字母、数字、竖线、下划线、英文点号(.)和英文半角冒号(:)。
+4. **命名空间：**使用命名空间来区分不同部分的 Key。例如，可以为用户数据使用 "user:" 前缀，为缓存数据使用 "cache:" 前缀。
+5. **长度限制：**避免在 Key 的长度过长，会占用内存空间。
+
+**Value 的设计原则**
+
+1. **数据类型选择：**根据数据的特性选择合适的数据格式。Redis 支持字符串、列表、哈希、集合和有序集合等多种数据类型，选择合适的数据格式可以提高操作效率。
+2. **避免大 Key：**如果 Value 很大，那么对应的 Key 就称之为大 Key，大 Key 会带来很多问题应该尽量避免。可以尝试将大数据分割为多个小 Value，以提高性能和降低内存使用。
+3. **过期时间：**为 Value 设置适当的过期时间以自动清理不再需要的数据，以减少内存占用。
+4. **压缩：**如果数据具有可压缩性，可以在存储之前进行压缩，以减少内存使用。
+5. **合理控制和使用数据结构内存编码优化配置：**例如 ziplist 是一种特殊的数据结构，它可以将小型列表、哈希表和有序集合存储在一个连续的内存块中，从而节省了内存空间。但由于 ziplist 没有索引，因此在对 ziplist 进行查找、插入或删除操作时，需要进行线性扫描，这可能会导致性能下降。在实际应用中，应该根据具体情况来决定是否使用 ziplist。如果数据量较小且需要频繁进行遍历操作，那么使用 ziplist 可能是一个不错的选择。但是，如果数据量较大且需要频繁进行插入、删除或查找操作，那么使用 ziplist 可能会影响性能，应该考虑使用其他数据结构来代替。（本条来自腾讯云数据库规范）
+
+#### Redisson 和 Jedis 有啥区别？如何选择？
+
+Redisson 和 Jedis 是两个流行的 Java 客户端库，用于与 Redis 进行交互，其实在 Redisson 的官网上针对这两个产品做了比较全面的对比：https://redisson.org/feature-comparison-redisson-vs-jedis.html
+
+一句话就是 Jedis 非常的轻量级，极其简单，可以认为就是把Redis的命令做了一下封装，而Redisson提供了更多高级特性和功能，整体也更加复杂一些。
+
+**1、分布式集合：**
+
+- Redisson：提供多种Java集合对象的实现，包括Multimap、PriorityQueue、DelayedQueue等
+- Jedis：支持较少的分布式集合，大多只支持Map、Set、List等的基本命令。
+
+**2、分布式锁和同步器：**
+
+- Redisson：支持常见的Java锁和同步器，如FairLock、MultiLock、Semaphore、CountDownLatch等。
+- Jedis：不支持。需要自己实现
+
+**3、分布式对象：**
+
+- Redisson：实现了多种分布式对象，如Publish/Subscribe、BloomFilter、RateLimiter、Id Generator等。
+- Jedis：只支持基本的类型的基本命令，如AtomicLong、AtomicDouble、HyperLogLog等
+
+**4、高级缓存支持：**
+
+- Redisson：提供多种高级缓存功能，支持Read-through/Write-through/Write-behind等策略。
+- Jedis：不支持这些高级缓存功能。
+
+**5、API架构：**
+
+- Redisson：支持实例线程安全、异步接口、响应式流接口和RxJava3接口。
+- Jedis：不支持。
+
+**6、分布式服务：**
+
+- Redisson：提供ExecutorService、MapReduce、SchedulerService等服务。
+- Jedis：不支持这些分布式服务。
+
+**7、框架集成：**
+
+- Redisson：支持Spring Cache、Hibernate Cache、MyBatis Cache等。
+- Jedis：仅支持Spring Session和Spring Cache。
+
+**8、安全性：**
+
+- Redisson和Jedis：都支持认证和SSL。
+
+**9、自定义数据序列化：**
+
+- Redisson：支持多种编解码器，如JSON、JDK序列化、Avro等。
+- Jedis：不支持JDK序列化或上述编解码器。
+
+> 所以我们在选择的时候，如果需要高级特性如分布式锁、高级缓存支持或特定框架集成，Redisson 可能是更好的选择。如果项目需要一个轻量级的解决方案，且不需要高级功能，Jedis可能是合适的选择。
+
+#### 什么是 Redis 的 Pipeline，和事务有什么区别？
+
+**Redis 的 Pipeline 机制是一种用于优化网络延迟的技术**，主要用于在单个请求/响应周期内执行多个命令。在没有 Pipeline 的情况下，每执行一个 Redis 命令，客户端都需要等待服务器响应之后才能发送下一个命令。这种往返通信尤其在网络延迟较高的环境中会显著影响性能。
+
+在 Pipeline 模式下，客户端可以一次性发送多个命令到 Redis 服务器，而无需等待每个命令的响应。Redis 服务器接收到这批命令后，会依次执行它们并返回响应。
+
+![Redis-pipline](./images/Redis-pipline.png)
+
+所以，Pipeline 通过减少客户端与服务器之间的往返通信次数，可以显著提高性能，特别是在执行大量命令的场景中。
+
+但是，需要注意的是，Pipeline 是不保证原子性的，他的多个命令都是独立执行的，Redis 并不保证这些命令可以以不可分割的原子操作进行执行。这是 Pipeline 和 Redis 的事务的最大的区别。
+
+虽然都是执行一些相关命令，但是 Redis 的事务提供了原子性保障，保证命令执行以不可分割、不可中断的原子性操作进行，而Pipeline则没有原子性保证。
+
+但是他们在命令执行上有一个相同点，那就是如果执行多个命令过程中，有一个命令失败了，其他命令还是会被执行，而不会回滚的。
+
+>  如何使用 Pipeline
+
+在 Java 中，可以用 Jedis 来使用 pipeline：
+
+```java
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.Pipeline;
+
+public class RedisPipelineExample {
+    public static void main(String[] args) {
+        // 连接到 Redis 服务器
+        try (Jedis jedis = new Jedis("localhost", 6379)) {
+            // 创建 Pipeline
+            Pipeline pipeline = jedis.pipelined();
+
+            // 向 Pipeline 添加命令
+            pipeline.set("foo", "bar");
+            pipeline.get("foo");
+            pipeline.incr("counter");
+
+            // 执行 Pipeline 中的所有命令，并获取响应
+            List<Object> responses = pipeline.syncAndReturnAll();
+
+            // 输出响应
+            for (Object response : responses) {
+                System.out.println(response);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+#### Redis 的事务和 Lua 之间有哪些区别？
+
+Redis 中，事务和 Lua 都是保证原子性的手段，当我们有多个命令要执行，希望他们以原子性方式执行的时候，就会考虑使用事务或者 Lua 脚本，那么他们之间有哪些区别呢？（看了很多资料，包括redis官网文档，几乎都没有提，以下内容是我基于自己的理解整理的，欢迎大家补偿）
+
+
+
+**原子性保证**
+
+事务和 Lua 都是可以保证原子性操作的，但是，这里说的原子性我们提过很多次，指的是不可拆分，不可中断的原子性操作。所以，需要注意的是，不管是 Redis 的事务还是 Lua，都没办法回滚，一旦执行过程中有命令失败了，都是不支持回滚的。
+
+**但是，Redis 的事务在执行过程中，如果有某一个命令失败了，是不影响后续命令的执行的，而 Lua 脚本中，如果执行过程中某个命令执行失败了，是会影响后续命令执行的。**
+
+
+
+**交互次数**
+
+在 Redis 的事务执行时，每一条命令都需要和Redis服务器进行一次交互，我们可以在 Redis 事务过程中，MULTI 和 EXEC 之间发送多个 Redis 命令给到 Redis 服务器，这些命令会被服务器缓存起来，但并不会立即执行。但是每一条命令的提交都需要进行一次网络交互。
+
+而 Lua 脚本则不需要，只需要一次性的把整个脚本提交给 Redis 即可。网络交互比事务要少。
+
+
+
+**前后依赖**
+
+在 Redis 的事务中，事务内的命令都是独立执行的，并且在没有执行 EXEC 命令之前，命令是没有被真正执行的，所以后续命令是不会也不能依赖于前一个命令的结果的。
+
+而在 Lua 脚本中是可以依赖前一个命令的结果的，Lua 脚本中的多个命令是依次执行的，我们可以利用前一个命令的结果进行后续的处理。
+
+
+
+**流程编排**
+
+借助 Lua 脚本，我们可以实现非常丰富的各种分支流程控制，以及各种运算相关操作。而 Redis 的事务本身是不支持这些操作的。
+
+#### Redisson 的 lock 和 tryLock 有什么区别？
+
+当我们在使用 Redisson 实现分布式锁的时候，会经常用到 lock 和 tryLock 两个方法，那么他们有啥区别吗？
+
+先来看看代码中是如何解释这两个方法的：
+
+```java
+/**
+ * Tries to acquire the lock with defined <code>leaseTime</code>.
+ * Waits up to defined <code>waitTime</code> if necessary until the lock became available.
+ *
+ * Lock will be released automatically after defined <code>leaseTime</code> interval.
+ *
+ * @param waitTime the maximum time to acquire the lock
+ * @param leaseTime lease time
+ * @param unit time unit
+ * @return <code>true</code> if lock is successfully acquired,
+ *          otherwise <code>false</code> if lock is already set.
+ * @throws InterruptedException - if the thread is interrupted
+ */
+boolean tryLock(long waitTime, long leaseTime, TimeUnit unit) throws InterruptedException;
+
+/**
+ * Acquires the lock with defined <code>leaseTime</code>.
+ * Waits if necessary until lock became available.
+ *
+ * Lock will be released automatically after defined <code>leaseTime</code> interval.
+ *
+ * @param leaseTime the maximum time to hold the lock after it's acquisition,
+ *        if it hasn't already been released by invoking <code>unlock</code>.
+ *        If leaseTime is -1, hold the lock until explicitly unlocked.
+ * @param unit the time unit
+ *
+ */
+void lock(long leaseTime, TimeUnit unit);
+```
+
+这两个方法声明和注释上，主要由以下 3 个区别：
+
+- tryLock
+  - Tries to acquire the lock with defined leaseTime
+  - Waits up to defined waitTime if necessary until the lock became available.
+  - 返回值为 boolean
+- lock
+  - Acquires the lock with defined leaseTime
+  - Waits if necessary until lock became available.
+  - 返回值为 void
+
+> 那么，介绍一下就是 tryLock 是尝试获取锁，如果能获取到直接返回 true，如果无法获取到锁，他会按照我们指定的 waitTime 进行阻塞，在这个时间段内他还会再尝试获取锁。如果超过这个时间还没获取到则返回 false。如果我们没有指定 waitTime，那么他就在未获取到锁的时候，就直接返回 false 了。
+
+```java
+RLock lock = redisson.getLock("myLock");
+boolean isLocked = lock.tryLock(); // 非阻塞方法，立即返回获取结果
+if (isLocked) {
+    try {
+        // 执行临界区代码
+    } finally {
+        lock.unlock();
+    }
+} else {
+    // 获取锁失败，处理逻辑
+}
+```
+
+**lock 的原理是以阻塞的方式去获取锁，如果获取锁失败会一直等待，直到获取成功。**
+
+```java
+RLock lock = redisson.getLock("myLock");
+lock.lock(); // 阻塞方法，直到获取到锁
+try {
+    // 执行代码
+} finally {
+    lock.unlock();
+}
+```
+
+所以，我们可以认为，lock 实现的是一个阻塞锁，而 tryLock 实现的是一个非阻塞锁（在没有指定 waitTime 的情况下）。
+
+#### 为什么 Redis 不支持回滚？
+
+我们都知道，Redis 是不支持回滚的，即使是 Redis 的事务和 Lua 脚本，在执行的过程中，如果出现了错误，也是无法回滚的，可是，为什么呢？
+
+不支持回滚主要的原因是支持回滚将对 Redis 的简洁性和性能产生重大影响。
+
+主要有以下几个原因：
+
+**1、使用场景：**Redis 通常用作缓存和，而不是作为需要复杂事务处理的关系型数据库。因此，它的目标用户通常不需要复杂的事务支持。如果需要的话，直接用数据库就行了。
+**2、性能优先：**Redis 是一个高性能的 K-V 存储系统，它优化了速度和效率。引入回滚机制会增加复杂性和开销，从而影响其性能。
+**3、简化设计：**Redis 的设计哲学倾向于简单和高效。回滚机制会使系统变得复杂，增加了错误处理和状态管理的难度。
+**4、数据类型和操作：**Redis 支持的数据类型和操作通常不需要复杂的事务支持。大多数命令都是原子性的。
+**5、单线程模型：**Redis 事务是提交后一次性在单线程中执行的，而关系型数据库如 MySQL 是交互式的多线程模型执行的，所以 MySQL 需要事务的回滚来确保并发更新结果不出现异常。而Redis不太需要。
+**6、出错情况：**在 Redis 中，命令失败的原因比较有限：语法错误、操作的数据的类型不一致、Redis 资源不足等。而这几种问题，是应该在编码阶段就发现的，而不应该在 Redis 执行过程中出现。
+
+总结一下，以为 Redis 的设计就是简单、高效等，所以引入事务的回滚机制会让系统更加的复杂，并且影响性能。从使用场景上来说，Redis 一般都是被用作缓存的，不太需要很复杂的事务支持，当人们需要复杂的事务时会考虑持久化的关系型数据库。相比于关系型数据库，Redis 是通过单线程执行的，在执行过程中，出现错误的概率比较低，并且这些问题一般来编译阶段都应该被发现，所以就不太需要引入回滚机制。
+
+#### 如何用 Redis 实现乐观锁？
+
+所谓乐观锁，其实就是基于 CAS 的机制，CAS 的本质是 Compare And Swap，就是需要知道一个 key 在修改前的值，去进行比较。
+
+在 Redis 中，想要实现这个功能，我们可以依赖 WATCH 命令。这个命令一旦运行，他会确保只有在 WATCH 监视的键在调用 EXEC 之前没有改变时，后续的事务才会执行。
+
+例如，如果没有 INCRBY，我们可以用下面的方式实现原子的增量操作：
+
+```bash
+WATCH counter
+GET counter
+MULTI
+SET counter <从 GET 获得的值 + 任何增量>
+EXEC
+```
+
+1. WATCH：使用 WATCH 命令监视一个或多个键。这个命令会监视给定键直到事务开始（即执行 MULTI 命令）。
+2. GET：在事务开始之前，查询你需要的数据。
+3. MULTI：使用 MULTI 命令开始事务。
+4. SET：在事务中添加所有需要执行的命令。
+5. EXEC：使用 EXEC 命令执行事务。如果自从事务开始以来监视的键被修改过，EXEC 将返回 nil，这表示事务中的命令没有被执行。
+
+通过这种方式，Redis 保证了只有在监视的数据自事务开始以来没有改变的情况下，事务才会执行，从而实现了乐观锁定。
+
+以下，是在 Java 中，用 Jedis 实现的代码，和上述流程是一样的：
+
+```java
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.Transaction;
+
+public class RedisOptimisticLock {
+    public static void main(String[] args) {
+        // 连接到 Redis
+        Jedis jedis = new Jedis("localhost");
+
+        try {
+            // 监视键
+            String key = "myKey";
+            jedis.watch(key);
+
+            // 模拟从数据库读取最新值
+            String value = jedis.get(key);
+            int intValue = Integer.parseInt(value);
+
+            // 开始事务
+            Transaction t = jedis.multi();
+
+            // 在事务中执行操作
+            t.set(key, String.valueOf(intValue + 1));
+
+            // 尝试执行事务
+            if (t.exec() == null) {
+                System.out.println("事务执行失败，数据已被其他客户端修改");
+            } else {
+                System.out.println("事务执行成功");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            jedis.close();
+        }
+    }
+}
+```
+
+#### 如何用 setnx 实现一个可重入锁？
+
+可重入锁是一种多线程同步机制，允许同一线程多次获取同一个锁而不会导致死锁。
+
+在 Redis 中，最简单的方式就是使用setnx来实现一个分布式锁了，但是如果我想要实现一个具有重入功能的锁，那么用setnx如何实现呢？
+
+首先，我们需要有一个标识来识别出一个线程，这里可以是线程 ID，分布式的 traceId（https://www.yuque.com/hollis666/ca2plb/nnl88aqknhx2v76c ），或者是一个唯一的业务ID都可以。
+
+有了这个唯一标识之后，我们加锁的时候，就可以用这个标识来判断当前持有锁的线程是不是自己，如果是的话，就可以直接重入。否则就无法重入。
+
+为了保证重入几次之后，需要同时解锁几次，那么我们也需要维护一个重入次数的字段。因为每一次重入其实就是一个加锁动作，避免出现加锁2次，但是1次解锁动作就把锁给解了的情况。
+
+有了以上基础之后，加锁和解锁的逻辑如下：
+
+**加锁的逻辑：**
+
+- 当线程尝试获取锁时，它首先检查锁是否已经存在。
+- 如果锁不存在（即 SETNX 返回成功），线程设置锁，存储自己的标识符和计数器（初始化为1）
+- 如果锁已存在，线程检查锁中的标识符是否与自己的相同。
+  如果是，线程已经持有锁，只需增加计数器的值。
+  如果不是，获取锁失败，因为锁已被其他线程持有。
+
+**解锁的逻辑：**
+
+- 当线程释放锁时，它会减少计数器的值。
+- 如果计数器降至0，这意味着线程已完成对锁的所有获取请求，可以完全释放锁。
+- 如果计数器大于0，锁仍被视为被该线程持有。
+
+代码实现如下：
+
+```java
+import redis.clients.jedis.Jedis;
+
+public class ReentrantRedisLock {
+
+    public synchronized boolean tryLock(Jedis jedis,String lockKey) {
+        String currentThreadId = String.valueOf(Thread.currentThread().getId());
+
+        // 尝试获取锁
+        String lockValue = jedis.get(lockKey);
+        if (lockValue == null) {
+            // 锁不存在，尝试设置锁
+            jedis.set(lockKey, currentThreadId + ":1", "NX", "EX", 30);
+            return true;
+        }
+
+        // 锁存在，检查是否由当前线程持有
+        String[] parts = lockValue.split(":");
+
+        //加锁线程是当前线程，则增加次数，进行重入加锁
+        if (parts.length == 2 && parts[0].equals(currentThreadId)) {
+            int count = Integer.parseInt(parts[1]) + 1;
+            jedis.set(lockKey, currentThreadId + ":" + count, "XX", "EX", 30);
+            return true;
+        }
+
+        //加锁失败
+        return false;
+    }
+
+    public synchronized void unlock(Jedis jedis,String lockKey) {
+        String currentThreadId = String.valueOf(Thread.currentThread().getId());
+
+        String lockValue = jedis.get(lockKey);
+        if (lockValue != null) {
+            String[] parts = lockValue.split(":");
+            if (parts.length == 2 && parts[0].equals(currentThreadId)) {
+                int count = Integer.parseInt(parts[1]);
+                //减少重入次数
+                if (count > 1) {
+                    jedis.set(lockKey, currentThreadId + ":" + (count - 1), "XX", "EX", 30);
+                } else {
+                    //解锁
+                    jedis.del(lockKey);
+                }
+            }
+        }
+    }
+}
+```
+
+在这个实现中，锁的值是一个由线程 ID 和锁的获取次数组成的字符串，格式为 线程 ID:次数。当一个线程尝试获取锁时，它会检查当前的锁值。
+
+如果锁由相同的线程持有，则增加计数器；否则，尝试设置新的锁。释放锁时，它会递减计数器，当计数器为零时，锁被完全释放。
+
+
+
+**lua 优化**
+
+以上方式用 synchronized 来解决的并发，其实这里性能并不好，可以直接借助 lua 脚本的原子性来实现这个可重入的功能。
+
+以下是 lua 脚本部分的代码实现：
+
+```lua
+-- tryLock.lua
+-- 尝试获取锁的Lua脚本
+-- KEYS[1] 是锁的key
+-- ARGV[1] 是当前线程的标识
+-- ARGV[2] 是锁的超时时间
+local lockValue = redis.call('get', KEYS[1])
+if lockValue == false then
+    -- 锁不存在，创建锁并设置超时
+    redis.call('setex', KEYS[1], ARGV[2], ARGV[1] .. ':1')
+    return true
+else
+    local parts = {}
+    local index = 0
+    for match in (lockValue .. ":"):gmatch("(.-)" .. ":") do
+        parts[index] = match
+        index = index + 1
+    end
+    if parts[0] == ARGV[1] then
+        -- 锁已经被当前线程持有，重入次数加1
+        local count = tonumber(parts[1]) + 1
+        redis.call('setex', KEYS[1], ARGV[2], ARGV[1] .. ':' .. count)
+        return true
+    end
+end
+return false
+```
+
+> .. 是 Lua 中的字符串连接操作符，用于连接两个字符串。
+> gmatch 是 Lua 的一个字符串操作函数，用于在给定字符串中全局匹配指定的模式，并返回一个迭代器，每次调用这个迭代器都会返回下一个匹配的字符串。
+> 模式 "(.-):" 是一个模式表达式,功能是匹配任意数量的字符直到遇到第一个 ":"
+
+```lua
+-- unlock.lua
+-- 释放锁的Lua脚本
+-- KEYS[1] 是锁的key
+-- ARGV[1] 是当前线程的标识
+local lockValue = redis.call('get', KEYS[1])
+if lockValue ~= false then
+    local parts = {}
+    local index = 0
+    for match in (lockValue .. ":"):gmatch("(.-)" .. ":") do
+        parts[index] = match
+        index = index + 1
+    end
+    if parts[0] == ARGV[1] then
+        local count = tonumber(parts[1])
+        if count > 1 then
+            -- 减少重入次数
+            count = count - 1
+            redis.call('set', KEYS[1], ARGV[1] .. ':' .. count)
+        else
+            -- 重入次数为0，删除锁
+            redis.call('del', KEYS[1])
+        end
+        return true
+    end
+end
+return false
+```
+
+有了以上脚本之后，使用 jedis 就可以直接调用 lua 脚本了：
+
+```lua
+// 尝试获取锁
+String tryLockScript = "..."; // Lua脚本字符串
+Object result = jedis.eval(tryLockScript, Collections.singletonList(lockKey), Arrays.asList(currentThreadId, "30"));
+
+// 释放锁
+String unlockScript = "..."; // Lua脚本字符串
+jedis.eval(unlockScript, Collections.singletonList(lockKey), Collections.singletonList(currentThreadId));
+```
+
+#### Redis 实现分布锁的时候，哪些问题需要考虑？
+
+这是一个比较典型的关于 Redis 分布式锁的综合性问题，其实考察的就是关于分布式锁的熟悉程度，尤其是 Redis 的分布式锁的熟悉程度。
+
+我总结了一下关于这个问题可以回答的几个方向和关键点。
+
+
+
+**锁的基本要求**
+
+一个分布式锁有很多基本要求，比如说锁的互斥性、可重入性、锁的性能等问题。
+
+对于锁的互斥性，可以借助 setnx 来保证，因为这个操作本身就是一个原子性操作，并且结合 Redis 的单线程的机制，就可以保证互斥性。
+
+因为 Redis 是基于内存的，所以他的性能也是很高的，这个就没啥好说的了，大家都知道的。
+
+> 至于可重入性，其实就是说一个线程，在锁没有释放的情况下，他是可以反复的拿到同一把锁的。并且需要在锁中记录加锁次数，用来保证重入几次就需要解锁几次。用 setnx 也是可以实现的。
+>
+> 当然，如果我们直接使用 Redisson 的话，他是支持可重入锁的实现的。可以直接用。
+
+
+
+**误解锁问题**
+
+其实就是要确保只有锁的持有者能释放锁，避免其他客户端误解锁。这个问题其实挺傻的，但是我们实际就发生过，因为有的时候我们是在 finally 中去释放锁，finally 有一定会执行，那么就可能会导致虽然没拿到锁，但是当他执行 finally 的时候，也可能把锁给解了。
+
+所以，需要解决这个问题，我们就需要在使用 setnx 加锁时把具体持有锁的 owner 放进去，和上面一样，线程 ID 也好，业务单号也好，总之需要做一下判断。
+
+如果用了 Redisson 是不存在这个问题的。
+
+
+
+**锁的有效时间**
+
+为了避免死锁，我们一般会给一个分布式锁设置一个超时时间，如上面我们用的setnx的方案，其实就是设置了一个超时时间的。
+
+但是有的是，代码如果执行的比较慢的话，比如设置的超时时间是3秒，但是代码执行了5秒，那么就会导致在第三秒的时候，key超时了就自动解锁了，那么其他的线程就可以拿到锁了，这时候就会发生并发的问题了。
+
+所以，我们需要有一个好的办法来解决。一种是设置一个更长的超时时间，避免提前释放，我见过有人把分布式锁设置半个小时。。。
+
+但是这个方案非常不好，因为分布式锁是影响并发的，锁的时间长，意味着加锁时间段内只能有一个线程操作，那么并发度就会大大降低。
+
+还有一个好的办法，就是像 redisson 一样，实现一个 watch dog 的机制，给锁自动做续期，让锁不会提前释放。
+
+但是需要注意的是，只有我们没有自己主动设置锁的超时时间的时候，watchdog 才会续期，如果自己设置了超时时间，那么就不会给你续期了。具体看上面这个原理解读。
+
+
+
+**单点故障问题**
+
+有了自动续期之后，锁就一定可靠了吗？其实也不是，这里会存在两个单点问题。
+
+首先，在使用单节点 Redis 实现分布式锁时，如果这个 Redis 实例挂掉，那么所有使用这个实例的客户端都会出现无法获取锁的情况。
+
+这个问题是有解的，就是引入集群模式，通过哨兵检测 redis 实例挂掉的情况，提升整个集群的可用性。
+
+但是，这个方案同样存在一个单点故障带来的问题：
+
+当使用集群模式部署的时候，如果 master 一个客户端在 master 节点加锁成功了，然后没来得及同步数据到其他节点上，他就挂了， 那么这时候如果选出一个新的节点，再有客户端来加锁的时候，就也能加锁成功，因为数据没来得及同步，新的 master 会认为这个 key 是不存在的。
+
+为了解决这个问题，redis 的作者提出了一个算法 —— RedLock，他通过这种算法来保证在半数以上加锁成功才认为成功，这样就可以确保即使 master 挂了，新选出来的 master 也会有之前的加锁数据。
+
+
+
+**网络分区问题**
+
+但是，引入红锁就万事大吉了么。也并不是。红锁同样存在问题。首先就是一个网络分区的问题。
+
+在网络分区的情况下，比如集群发生了脑裂，不同的节点可能会获取到相同的锁，这会导致分布式系统的不一致性问题。
+
+但是我们需要注意的是，这个情况虽然会存在节点获取到相同锁，但这种情况只会发生在网络分区发生时，且只会发生在一小部分节点上。而在网络分区恢复后，RedLock 会自动解锁。所以理论上来说是有这个风险，但是实际上来说发生的概率极低。
+
+
+
+**时间漂移问题**
+
+除了脑裂，还有一个时钟飘逸的问题，由于不同的机器之间的时间可能存在微小的漂移，这会导致锁的失效时间不一致，也会导致分布式系统的不一致性问题。
+
+那么就会导致有的 redis 实例已经解锁了，那么就会使得新的客户端可以拿到锁。
+
+这个问题的解决方案是，RedLock 可以使用 NTP 等工具来同步不同机器之间的时间，从而避免时间漂移导致的问题。
+
+#### Redis 如何高效安全的遍历所有 key ?
+
+在 Redis 中遍历所有的 key，有两种办法，分别使用 KEYS 命令和 SCAN 命令。
+
+KEYS 命令用于查找所有符合给定模式的键，例如 `KEYS *` 会返回所有键。它在小数据库中使用时非常快，但在包含大量键的数据库中使用可能会阻塞服务器，因为它一次性检索并返回所有匹配的键。
+
+如使用 Jedis 的是实现方式如下：
+
+```java
+import redis.clients.jedis.Jedis;
+
+public class RedisKeysExample {
+    public static void main(String[] args) {
+        Jedis jedis = new Jedis("localhost");
+        Set<String> keys = jedis.keys("*"); // 使用KEYS命令获取所有键
+        for(String key : keys) {
+            System.out.println(key);
+        }
+        jedis.close();
+    }
+}
+```
+
+**SCAN 命令提供了一种更安全的遍历键的方式，它以游标为基础分批次迭代键集合，每次调用返回一部分匹配的键**。SCAN命令不会一次性加载所有匹配的键，因此不会像KEYS命令那样阻塞服务器，更适合用于生产环境中遍历键集合。
+
+如使用Jedis的是实现方式如下：
+
+```java
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.ScanParams;
+import redis.clients.jedis.ScanResult;
+
+public class RedisScanExample {
+    public static void main(String[] args) {
+        Jedis jedis = new Jedis("localhost");
+        String cursor = ScanParams.SCAN_POINTER_START;
+        ScanParams scanParams = new ScanParams().count(10);
+        do {
+            ScanResult<String> scanResult = jedis.scan(cursor, scanParams);
+            cursor = scanResult.getCursor();
+            scanResult.getResult().forEach(System.out::println);
+        } while (!cursor.equals("0"));
+        jedis.close();
+    }
+}
+```
+
+当遍历结束时，cursor 的值会变为 0，我们可以通过判断 cursor 的值来终止迭代。
+
 #### Redis Cluster 中使用事务和 lua 有什么限制？
+
+Redis Cluster采用主从复制模式来提高可用性。每个分片都有一个主节点和多个从节点。主节点负责处理写操作，而从节点负责复制主节点的数据并处理读请求。在Redis的Cluster 集群模式中，会对数据进行数据分片，将整个数据集分配给不同节点。
+
+这个思想就和我们在MySQL 中做分库分表是一样的，都是通过一定的分片算法，把数据分散到不同的节点上进行存储。
+
+**那么和 MySQL 对跨库事务支持存在限制一样，在 Redis Cluster 中使用事务和 Lua 脚本时，也是有一定的限制的。**
+
+**在 Redis Cluster 中，事务不能跨多个节点执行**。事务中涉及的所有键必须位于同一节点上。如果尝试在一个事务中包含多个分片的键，事务将失败。另外，对 WATCH 命令也用同样的限制，要求他只能监视位于同一分片上的键。
+
+和事务相同，**执行 Lua 脚本时，脚本中访问的所有键也必须位于同一节点**。Redis 不会在节点之间迁移数据来支持跨节点的脚本执行。Lua 脚本执行为原子操作，但是如果脚本因为某些键不在同一节点而失败，整个脚本将终止执行，可能会影响数据的一致性。
+
+当我们要跨节点执行 lua 的时候，会报错提示：command keys must in same slot。（详见：https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/ ）
 
 #### 如何在 Redis Cluster 中执行 lua 脚本？
 
+因为 Redis  Cluster 中，数据会被分片到多个节点上，跨节点的 lua 脚本是不支持的，所以就会失败。但是 Cluster 是很常见的场景，lua （以及事务）也是一个非常重要的用法，这个问题怎么解决呢？
+
+
+
+**Hash Tag**
+
+如果我们想要执行 lua 脚本或者事务的时候，就需要确保多个相关的键应该存储在同一个节点上以便执行原子操作，默认情况下，Redis 使用键的哈希值来决定将数据存储在哪个节点。而Redis 中的 hashtag 就是一种可以让我们干预 hash 结果的机制。
+
+Redis 中的 hashtag 是键名中用大括号 {} 包裹的部分。Redis 对大括号内的字符串计算哈希值，并基于这个哈希值将键分配到特定的节点。只有键名中包含大括号，且大括号内有内容时，大括号内的部分才会被用来计算哈希值。如果大括号为空或不包含任何字符，Redis 将整个键名用于哈希计算。
+
+有了这个特性，我们就可以在设计键名时，可以将共享相同逻辑或数据集的键包含相同的 hashtag。就和我们在 MySQL 的分库分表中的基因法其实是类似的概念。
+
+例如，如果你有多个与用户 ID 相关的键，可以使用 `user:{12345}:profile 和 user:{12345}:settings` 这样的命名方式，确保它们都位于同一个节点。这样他只会用 `{12345}` 进行 hash 算法，这样虽然他们是不同的 key，但是分片之后的结果就可以在同一个节点上。这样就能执行事务或者 lua 脚本了。
+
+
+
+**其他方案**
+
+除了使用 Hash Tag 以外，还有一些其他的方案，也能实现，比如：
+
+1. 应用层处理：如果跨节点操作不可避免，可以在应用层通过分布式事务管理器或其他机制来协调多个节点的数据一致性。这通常需要复杂的逻辑和额外的开发工作。
+2. 拆分操作：尽量将需要事务处理的逻辑拆分成多个独立的、可以在单个节点上执行的小操作，从而避免跨节点事务的需求。
+
+
+
+**allow-cross-slot-keys**
+
+在 Redis 7.0.11 中新增了一个命令：`allow-cross-slot-keys`
+
+开启这个配置，可以允许在单个命令中使用不同槽（slot）的键。例如，你可以在一个 MSET 命令中设置多个键，即使这些键属于不同的槽。
+
+但是，需要注意的是，即使启用了 `allow-cross-slot-keys`，事务中的所有键仍然必须位于同一个槽（即同一个节点）才能保证事务的原子性。如果事务中的键分布在不同的节点上，Redis 会拒绝执行这些命令。
+
+所以，网上有的文章说，使用 `allow-cross-slot-keys` 就能做跨节点事务或者 lua 了，其实是不对的！
+
+但是需要注意的是，启用这个选项的命令可能会因为涉及多个节点的网络通信而导致性能降低，但这并不会让这些操作变成原子操作。
+
 #### Redisson 中为什么要废弃 RedLock，该用啥？
+
+RedLock 算法是一种基于 Redis 实现的分布式锁的方法，主要用来解决 Redis 的单点问题，详细算法细节见上文。
+
+在我们常用的 Redisson 中是支持 RedLock 的，但是在后续的版本中已经被废弃（Deprecated）了：
+
+https://github.com/redisson/redisson/blob/master/redisson/src/main/java/org/redisson/RedissonRedLock.java#L26
+
+导致 Redisson 废弃 RedLock ，可能有以下几个原因：
+
+1. 缺乏官方认证：尽管 RedLock 算法由 Redis 的创始人提出的，他后来指出，这种算法并没有经过彻底的检验，并且他不推荐在需要严格一致性的分布式系统中使用它。
+2. 安全性和可靠性的担忧：在某些情况下，RedLock 算法可能无法保证互斥性，特别是在网络分区和节点故障的情况下。这种不确定性可能导致算法在分布式环境中的锁定行为不是完全可靠的。
+3. 维护和操作复杂性：实现和维护 RedLock 需要对多个 Redis 实例进行操作，这不仅增加了部署的复杂性，也增加了出错的可能性。
+4. Martin Kleppmann 的批评：分布式系统领域的知名研究者和作者 Martin Kleppmann ，在他的分析中指出，RedLock 算法存在几个关键问题，可能导致它在某些故障模式下不能正确地提供锁服务。
+
+当然，以上只是一些猜测，主要其实就是官方不认可，并且作者表示也不承担责任，所以在 Redisson 这种框架中就不再支持他了。
+
+
+
+**替代方案**
+
+那么，在 RedLock 不再被建议使用之后，到底有什么方案来解决这种集群中的一致性问题导致的重复加锁呢？
+
+这个在业内并没有公认的方案。在实践中，可以有以下几个方案：
+
+1、这个方案我说出来可能会被喷，但是还是要提一下，因为他确实有效。那就是使用单实例的 Redis 锁，虽然这样的方案会面临单点故障的问题，但是在一些可以容忍短暂的服务中断的场景，用的还是比较多的。
+
+2、还是用普通的锁，如 SETNX、redisson 等，但是在业务逻辑中做好幂等控制及状态及校验（比如数据库的唯一性约束），以及各种对账。这样就可以避免真的出现因为 Redis 的集群一致性出现问题导致重复加锁时，导致业务出现问题。主要业务没问题，其实就不算问题了。
+
+3、使用那种强一致性的组件来实现分布式锁，如 ZooKeeper、etcd 或 Consul，这些系统提供了更强大的一致性保证，适用于需要严格一致性的分布式应用。这些系统使用类似于 Raft 或 Paxos 的一致性算法来保证数据的一致性和分布式锁的安全性。
