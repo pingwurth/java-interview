@@ -428,7 +428,7 @@ Java 学习 + 面试指南
 
 #### 视频资源
 
-[Java设计模式精讲 Debug方式+内存分析]([https://coding.imooc.com/class/270.html)
+[Java设计模式精讲 Debug方式+内存分析](https://coding.imooc.com/class/270.html)
 
 - [学习笔记](https://pan.baidu.com/s/1nvXZL4Fzg6oRR7WUVLvFvw)
 
