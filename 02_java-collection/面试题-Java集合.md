@@ -277,14 +277,6 @@ TreeSet 根据 compareTo() 方法判断元素是否重复，重复就放弃插�
 
 HashSet 内部使用的是 HashMap 来存储对象，key 用来存储真正的数据，而 value 用 Object 对象来模拟。
 
-## Queue
-
-
-
-## Stack
-
-
-
 ## Map
 
 #### hash 冲突怎么解决？

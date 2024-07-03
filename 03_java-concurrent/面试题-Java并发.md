@@ -2043,7 +2043,79 @@ public ScheduledThreadPoolExecutor(int corePoolSize) {
 
 #### Fork/Join 框架了解吗？
 
+Fork/Join 框架是 Java7 提供的一个用于并行执行任务的框架，是一个把大任务分割成若干个小任务，最终汇总每个小任务结果后得到大任务结果的框架。
 
+要想掌握 Fork/Join 框架，首先需要理解两个点，**分而治之**和**工作窃取**算法。
+
+> Fork/Join 框架的定义，其实就体现了分治思想：将一个规模为 N 的问题分解为 K 个规模较小的子问题，这些子问题相互独立且与原问题性质相同。求出子问题的解，就可得到原问题的解。
+
+![fork和join图解](./images/fork和join图解.png)
+
+**工作窃取算法**
+
+大任务拆成了若干个小任务，把这些小任务放到不同的队列里，各自创建单独线程来执行队列里的任务。
+
+那么问题来了，有的线程干活块，有的线程干活慢。干完活的线程不能让它空下来，得让它去帮没干完活的线程干活。它去其它线程的队列里窃取一个任务来执行，这就是所谓的工作窃取。
+
+工作窃取发生的时候，它们会访问同一个队列，为了减少窃取任务线程和被窃取任务线程之间的竞争，通常任务会使用双端队列，被窃取任务线程永远从双端队列的头部拿，而窃取任务的线程永远从双端队列的尾部拿任务执行。
+
+![窃取任务](./images/窃取任务.png)
+
+看一个 Fork/Join 框架应用的例子，计算 1~n 之间的和：`1+2+3+…+n`
+
+- 设置一个分割阈值，任务大于阈值就拆分任务
+- 任务有结果，所以需要继承 RecursiveTask
+
+```java
+public class CountTask extends RecursiveTask<Integer> {
+    private static final int THRESHOLD = 16; // 阈值
+    private int start;
+    private int end;
+
+    public CountTask(int start, int end) {
+        this.start = start;
+        this.end = end;
+    }
+
+    @Override
+    protected Integer compute() {
+        int sum = 0;
+        // 如果任务足够小就计算任务
+        boolean canCompute = (end - start) <= THRESHOLD;
+        if (canCompute) {
+            for (int i = start; i <= end; i++) {
+                sum += i;
+            }
+        } else {
+            // 如果任务大于阈值，就分裂成两个子任务计算
+            int middle = (start + end) / 2;
+            CountTask leftTask = new CountTask(start, middle);
+            CountTask rightTask = new CountTask(middle + 1, end);
+            // 执行子任务
+            leftTask.fork();
+            rightTask.fork(); // 等待子任务执行完，并得到其结果
+            int leftResult = leftTask.join();
+            int rightResult = rightTask.join(); // 合并子任务
+            sum = leftResult + rightResult;
+        }
+        return sum;
+    }
+
+    public static void main(String[] args) {
+        ForkJoinPool forkJoinPool = new ForkJoinPool(); // 生成一个计算任务，负责计算1+2+3+4
+        CountTask task = new CountTask(1, 100); // 执行一个任务
+        Future<Integer> result = forkJoinPool.submit(task);
+        try {
+            System.out.println(result.get());
+        } catch (InterruptedException e) {
+        } catch (ExecutionException e) {
+        }
+    }
+
+}
+```
+
+ForkJoinTask 与一般 Task 的主要区别在于它需要实现 compute 方法，在这个方法里，首先需要判断任务是否足够小，如果足够小就直接执行任务。如果比较大，就必须分割成两个子任务，每个子任务在调用 fork 方法时，又会进 compute 方法，看看当前子任务是否需要继续分割成子任务，如果不需要继续分割，则执行当前子任务并返回结果。使用 join 方法会等待子任务执行完并得到其结果。
 
 #### ForkJoinPool 和 ThreadPoolExecutor 区别是什么？
 
@@ -2140,7 +2212,99 @@ ConcurrentHashMap 通过弱一致性迭代器和 Segment 分离机制来实现 f
 
 #### 如何理解 AQS？
 
+AbstractQueuedSynchronizer （抽象队列同步器，以下简称 AQS）出现在 JDK 1.5 中。AQS 是很多同步器的基础框架，比如 ReentrantLock、CountDownLatch 和 Semaphore 等都是基于 AQS 实现的。除此之外，我们还可以基于 AQS，定制出我们所需要的同步器。
 
+```java
+public abstract class AbstractQueuedSynchronizer
+    extends AbstractOwnableSynchronizer
+    implements java.io.Serializable {
+}
+```
+
+![如何理解AQS](./images/如何理解AQS.png)在 AQS 内部，维护了一个 FIFO 队列和一个 volatile 的 int 类型的 state 变量。在 state=1 的时候表示当前对象锁已经被占有了，state 变量的值修改的动作通过 CAS 来完成。
+
+**FIFO 队列用来实现多线程的排队工作，当线程加锁失败时，该线程会被封装成一个 Node 节点来置于队列尾部。**
+
+![AQS-加锁](./images/AQS-加锁.png)
+
+**当持有锁的线程释放锁时，AQS 会将等待队列中的第一个线程唤醒，并让其重新尝试获取锁。**
+
+![AQS-获取锁](./images/AQS-获取锁.png)
+
+> 上图展示的是一个非公平锁，如果是公平锁则第一步只进行判断队列中是否有前序节点，如果有的话，直接入队列，不会进行第一次的CAS。
+
+**同步状态——state**
+
+AQS 使用一个 volatile int 类型的成员变量来表示同步状态，在 state=1 的时候表示当前对象锁已经被占有了。它提供了三个基本方法来操作同步状态：getState(), setState(int newState), 和 compareAndSetState(int expect, int update)。这些方法允许在不同的同步实现中自定义资源的共享和独占方式。
+
+```java
+// 同步状态
+private volatile int state;
+
+// 获取状态
+protected final int getState() {
+    return state;
+}
+
+// 设置状态
+protected final void setState(int newState) {
+    state = newState;
+}
+
+// CAS更新状态
+protected final boolean compareAndSetState(int expect, int update) {
+    // See below for intrinsics setup to support this
+    return unsafe.compareAndSwapInt(this, stateOffset, expect, update);
+}
+```
+
+**FIFO 队列 —— Node**
+
+AQS 内部通过一个内部类 —— Node，AQS就是借助他来实现同步队列的功能的。
+
+![AQS类图](./images/AQS类图.png)
+
+当线程尝试获取资源失败时，AQS 会将该线程包装成一个 Node 节点，并将其插入同步队列的尾部。在资源可用时，队列头部的节点会尝试再次获取资源。（在 AQS 中，Node 也用于构建条件队列。当线程需要等待某个条件时，它会被加入到条件队列中。当条件满足时，线程会被转移回同步队列。）
+
+```java
+// Node类用于构建队列
+static final class Node {
+    // 标记节点状态。常见状态有 CANCELLED（表示线程取消）、SIGNAL（表示后继节点需要运行）、CONDITION（表示节点在条件队列中）等。
+    volatile int waitStatus;
+    // 前驱节点
+    volatile Node prev;
+    // 后继节点
+    volatile Node next;
+    // 节点中的线程，存储线程引用，指向当前节点所代表的线程。
+    volatile Thread thread;
+}
+
+// 队列头节点，延迟初始化。只在setHead时修改
+private transient volatile Node head;
+// 队列尾节点，延迟初始化。
+private transient volatile Node tail;
+
+// 入队操作
+private Node enq(final Node node) {
+    for (;;) {
+        Node t = tail;
+        if (t == null) { // 必须先初始化
+            if (compareAndSetHead(new Node()))
+                tail = head;
+        } else {
+            node.prev = t;
+            if (compareAndSetTail(t, node)) {
+                t.next = node;
+                return t;
+            }
+        }
+    }
+}
+```
+
+就这样，一个又一个 Node 被连接在一起，就成为了一个 FIFO 的队列。
+
+![AQS-sync queue](./images/AQS-sync queue.png)
 
 #### AQS 是如何实现线程的等待和唤醒的？
 

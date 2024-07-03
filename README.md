@@ -280,7 +280,7 @@ Java 学习 + 面试指南
 
 [Java核心技术 卷Ⅱ 高级特性（原书第11版）- JDK11](https://pan.baidu.com/s/1fjm3r4gRoh5VGacD2Z0IpQ?pwd=03cj)
 
-[Java核心技术 卷Ⅰ+ 卷Ⅱ（第12版）- JDK17](https://pan.baidu.com/s/1I8lQGXSoC0GNK5RcG2h2TA?pwd=h6de)
+[Java核心技术 卷Ⅰ+ 卷Ⅱ（第12版）- JDK17](https://pan.baidu.com/s/1bLyZBWoMP2haNyvQDw9yHg?pwd=5e7a)
 
 #### 视频资源
 
