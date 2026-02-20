@@ -355,6 +355,32 @@ Hashtable 同步的，线程安全的
 
 内部维护了一个双向链表。
 
+#### 为什么 ConcurrentHashMap 不允许 null 值？
+
+为了让语义更加准确。
+
+如果允许 null 值，当我们 `map.get(key)` 返回 null 的时候，我们不知道是找不到这个 key 还是这个 key 就是存的 null 值，没有一个确定的结果。
+
+虽然 HashMap 也存在这个问题，但它可以通过 `map.contains(key)` 来判断是否存在这个 key。
+
+ConcurrentHashMap 是设计用于多线程的，用 `map.contains(key)` 来判断是否存在某个 key 是不可靠的，可能下一时刻就被其他线程移除或新增了。
+
+#### JDK1.8 中 HashMap 有哪些改变？
+
+
+
+#### HashMap 在并发场景中有什么问题？
+
+
+
+#### ConcurrentHashMap 为什么在 JDK1.8 中废弃了分段锁？
+
+
+
+#### ConcurrentHashMap 为什么在 JDK1.8 中使用 synchronized 而不是 ReentrantLock?
+
+
+
 ### 深入源码
 
 #### HashMap 如何定位 key
